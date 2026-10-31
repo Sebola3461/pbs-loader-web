@@ -22,6 +22,8 @@ const DEFAULT_MESSAGE = 'O endereço pode estar errado, ou a página saiu do ar.
       align-items: flex-start;
       gap: var(--space-3);
       margin-block: var(--space-7);
+      padding-top: var(--space-4);
+      border-top: 3px solid var(--color-primary);
     }
   `,
 })
