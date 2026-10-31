@@ -6,6 +6,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { apiErrorMessage } from './api-error';
 import { LoginForm } from './login-form';
 import { PasswordForm } from './password-form';
@@ -17,11 +18,12 @@ type DialogKind = 'login' | 'username' | 'password';
 /** Área de conta no cabeçalho: formulário de login, ou nome, senha e "Sair". */
 @Component({
   selector: 'app-user-menu',
-  imports: [LoginForm, PasswordForm, UsernameForm],
+  imports: [LoginForm, PasswordForm, UsernameForm, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (session.user(); as user) {
       <div class="user">
+        <a routerLink="/meus-envios" class="envios-link">Meus envios</a>
         <button type="button" class="username" (click)="open('username')" title="Trocar nome">
           {{ user.username }}
         </button>
@@ -68,6 +70,19 @@ type DialogKind = 'login' | 'username' | 'password';
       display: flex;
       align-items: center;
       gap: var(--space-2);
+    }
+    .envios-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.75rem;
+      padding-inline: var(--space-2);
+      font: inherit;
+      font-weight: 500;
+      color: var(--color-link);
+      text-decoration: none;
+    }
+    .envios-link:hover {
+      text-decoration: underline;
     }
     .username {
       min-height: 2.75rem;

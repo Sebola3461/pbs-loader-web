@@ -13,6 +13,7 @@ import { PageMetaStrategy, SITE_NAME } from './page-meta';
 import { AuthorPage } from './pages/author/author';
 import { Home } from './pages/home/home';
 import { ModDetail } from './pages/mod-detail/mod-detail';
+import { MySubmissions } from './pages/my-submissions/my-submissions';
 import { NotFound } from './pages/not-found/not-found';
 import { Submit } from './pages/submit/submit';
 
@@ -56,10 +57,26 @@ export const routes: Routes = [
     },
   },
   {
+    path: 'mods/:autor/:id/editar',
+    component: Submit,
+    title: `Editar mod · ${SITE_NAME}`,
+    data: {
+      description: 'Edite ou remova o seu mod no catálogo da comunidade do Proton Bus Simulator.',
+    },
+  },
+  {
     path: 'autores/:slug',
     component: AuthorPage,
     title: authorTitle,
     resolve: { description: authorDescription },
+  },
+  {
+    path: 'meus-envios',
+    component: MySubmissions,
+    title: `Meus envios · ${SITE_NAME}`,
+    data: {
+      description: 'Acompanhe os envios da sua conta para o catálogo da comunidade.',
+    },
   },
   { path: '**', component: NotFound, title: NOT_FOUND_TITLE },
 ];

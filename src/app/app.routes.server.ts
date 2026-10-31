@@ -23,6 +23,9 @@ export const serverRoutes: ServerRoute[] = [
       })),
   },
   { path: 'enviar', renderMode: RenderMode.Prerender },
+  // Páginas de sessão: o shell só do cliente serve (o 404.html é exatamente esse shell).
+  { path: 'mods/:autor/:id/editar', renderMode: RenderMode.Client },
+  { path: 'meus-envios', renderMode: RenderMode.Client },
   // Gera o index.csr.html, que scripts/postbuild.mjs copia para 404.html: sem HTML pré-renderizado, o cliente
   // monta a página certa (mod removido, autor que saiu) sem hidratar sobre o DOM de outro componente.
   { path: '**', renderMode: RenderMode.Client },

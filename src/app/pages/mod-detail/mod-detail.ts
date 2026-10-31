@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
   authorSlug,
@@ -8,6 +14,7 @@ import {
   MOD_TYPE_LABELS,
 } from '../../catalog/catalog';
 import { CatalogStore } from '../../catalog/catalog.store';
+import { SessionStore } from '../../session/session.store';
 import { StarRating } from '../../session/star-rating';
 import { SITE_LINKS } from '../../site-links';
 import { NotFound } from '../not-found/not-found';
@@ -21,12 +28,20 @@ import { NotFound } from '../not-found/not-found';
 })
 export class ModDetail {
   private readonly store = inject(CatalogStore);
+  private readonly session = inject(SessionStore);
 
   /** Parâmetro :autor da rota (withComponentInputBinding): slug do dono, que desambígua ids repetidos. */
   readonly autor = input.required<string>();
 
   /** Parâmetro :id da rota (withComponentInputBinding). */
   readonly id = input.required<string>();
+
+  /** Editar pelo site é só para o dono da conta; autores do GitHub mexem direto no catálogo. */
+  protected readonly canEdit = computed(() => {
+    const user = this.session.user();
+    const mod = this.view()?.mod;
+    return Boolean(user && mod && 'site' in mod.dono && mod.dono.site === user.id);
+  });
 
   protected readonly links = SITE_LINKS;
   protected readonly view = computed(() => {

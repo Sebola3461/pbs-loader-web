@@ -241,13 +241,15 @@ export async function getMySubmissions(
   const user = await requireUser(env.DB, request, deps.now());
   const rows = await env.DB
     .prepare(
-      'SELECT id, mod_id, operation, status, pr_number, created_at, updated_at FROM submissions WHERE user_id = ? ORDER BY created_at DESC',
+      'SELECT id, mod_id, operation, payload, idempotency_key, status, pr_number, created_at, updated_at FROM submissions WHERE user_id = ? ORDER BY created_at DESC',
     )
     .bind(user.id)
     .all<{
       id: string;
       mod_id: string;
       operation: string;
+      payload: string | null;
+      idempotency_key: string;
       status: string;
       pr_number: number | null;
       created_at: string;
@@ -272,6 +274,9 @@ export async function getMySubmissions(
       id: row.id,
       modId: row.mod_id,
       operation: row.operation,
+      // Payload e chave são do próprio usuário: a UI precisa deles para o "tentar de novo" de um failed.
+      payload: row.payload,
+      idempotencyKey: row.idempotency_key,
       status,
       prNumber: row.pr_number,
       createdAt: row.created_at,

@@ -1,0 +1,73 @@
+<section class="envios">
+  @if (session.loaded() && !session.user()) {
+    <div class="panel">
+      <h1>Meus envios</h1>
+      <p>Entre com sua conta para ver seus envios — use o botão <strong>Entrar</strong> no cabeçalho.</p>
+      <a class="button button-secondary" routerLink="/">Voltar para os mods</a>
+    </div>
+  } @else {
+    <h1>Meus envios</h1>
+    <p class="lead">
+      Publicações, edições e remoções da sua conta. O estado vem do catálogo: enquanto o PR está
+      aberto, está em publicação.
+    </p>
+
+    @if (error(); as mensagem) {
+      <p class="form-error" role="alert">{{ mensagem }}</p>
+    }
+
+    @if (rows(); as lista) {
+      @if (lista.length === 0) {
+        <div class="panel">
+          <p>Você ainda não enviou nada.</p>
+          <a class="button" routerLink="/enviar">Enviar um mod</a>
+        </div>
+      } @else {
+        <ul class="lista">
+          @for (row of lista; track row.id) {
+            <li>
+              <div class="envio">
+                <span class="envio-id">
+                  @if (modLink(row); as link) {
+                    <a [routerLink]="link">{{ row.modId }}</a>
+                  } @else {
+                    {{ row.modId }}
+                  }
+                </span>
+                <span class="envio-op">{{ operationLabel(row.operation) }}</span>
+                <span
+                  class="badge"
+                  [class.badge-success]="row.status === 'merged'"
+                  [class.badge-warning]="row.status === 'failed' || row.status === 'rejected'"
+                  >{{ statusLabel(row.status) }}</span
+                >
+              </div>
+              <div class="envio-acoes">
+                @if (row.prNumber; as pr) {
+                  <a
+                    class="envio-pr"
+                    [href]="'https://github.com/Sebola3461/pbs-loader-catalogo/pull/' + pr"
+                    rel="noopener"
+                    >PR #{{ pr }}</a
+                  >
+                }
+                @if (row.status === 'failed') {
+                  <button
+                    type="button"
+                    class="button-link"
+                    (click)="retry(row)"
+                    [disabled]="busy() !== null"
+                  >
+                    {{ busy() === row.id ? 'Repetindo…' : 'Tentar de novo' }}
+                  </button>
+                }
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    } @else {
+      <p>Carregando…</p>
+    }
+  }
+</section>

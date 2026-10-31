@@ -30,6 +30,13 @@
             >Página do mod</a
           >
         }
+        @if (canEdit()) {
+          <a
+            class="button button-secondary"
+            [routerLink]="['/mods', view.authorSlug, view.mod.id, 'editar']"
+            >Editar</a
+          >
+        }
       </div>
     </header>
 

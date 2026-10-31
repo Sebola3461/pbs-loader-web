@@ -25,6 +25,8 @@ const MESSAGES: Record<string, string> = {
   not_owner: 'Este mod pertence a outra pessoa.',
   forbidden: 'Você não tem permissão para isso.',
   submission_limit: 'Você já fez 5 envios nas últimas 24 horas. Tente de novo amanhã.',
+  pr_conflict:
+    'Já existe um envio em publicação para esse mod. Espere o PR atual entrar ou ser fechado.',
 };
 
 export function apiErrorMessage(error: unknown): string {

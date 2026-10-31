@@ -9,6 +9,7 @@ import { RatingsStore } from './ratings.store';
 import { SessionStore, SessionUser } from './session.store';
 import { formatAverage, StarRating } from './star-rating';
 import { loadTurnstile, resetTurnstileLoader } from './turnstile';
+import { provideRouter } from '@angular/router';
 import { UserMenu } from './user-menu';
 import { UsernameForm } from './username-form';
 
@@ -50,6 +51,7 @@ function fakeRatings(stats = {}, mine = {}) {
 function provide(session: ReturnType<typeof fakeSession>, ratings = fakeRatings()) {
   TestBed.configureTestingModule({
     providers: [
+      provideRouter([]),
       { provide: SessionStore, useValue: session.store },
       { provide: RatingsStore, useValue: ratings },
     ],
