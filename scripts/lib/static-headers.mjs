@@ -61,6 +61,13 @@ export function inlineScriptHashes(html) {
   return hashes;
 }
 
+// Fontes do design system (DESIGN.md) vem do Google Fonts: o CSS entra em style-src e
+// os arquivos de fonte, em font-src, como a documentação deles pede para sites com CSP.
+export const GOOGLE_FONTS = {
+  css: 'https://fonts.googleapis.com',
+  font: 'https://fonts.gstatic.com',
+};
+
 /**
  * Conteúdo do _headers do Cloudflare Pages. style-src aceita inline porque o pré-render do Angular põe os estilos
  * dos componentes em <style>; script-src só aceita os scripts do próprio site e os inline conhecidos pelo hash.
@@ -70,11 +77,11 @@ export function buildHeaders(scriptHashes) {
   const csp = [
     "default-src 'self'",
     `script-src ${scripts}`,
-    "style-src 'self' 'unsafe-inline'",
+    `style-src 'self' 'unsafe-inline' ${GOOGLE_FONTS.css}`,
     `img-src 'self' data: ${COVER_ORIGIN}`,
     `frame-src ${TURNSTILE.frame}`,
     "connect-src 'self'",
-    "font-src 'self'",
+    `font-src 'self' ${GOOGLE_FONTS.font}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

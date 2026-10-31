@@ -1,31 +1,36 @@
 :root {
   color-scheme: dark;
 
-  /* Tema escuro único e comedido: cinzas médios, texto claro sem branco puro e azul discreto na ação. */
-  --color-background: #16181d;
-  --color-surface: #1e2128;
-  --color-surface-muted: #272b33;
-  --color-foreground: #e3e5e8;
-  --color-muted-foreground: #9ba1ab;
-  --color-border: #2c3038;
-  --color-border-strong: #3b404a;
-  --color-primary: #2f6fdf;
-  --color-primary-hover: #2a62c6;
-  --color-on-primary: #ffffff;
-  --color-primary-soft: #232c3c;
-  --color-link: #8db4f5;
-  --color-success-bg: #1f3329;
-  --color-success-fg: #a6d9b8;
-  --color-warning-bg: #352d1d;
-  --color-warning-fg: #e7cf9c;
+  /* Garagem retrofuturista (DESIGN.md): base OLED, âmbar de luz-piloto só na ação,
+     azul discreto na leitura e dourado exclusivo das estrelas. */
+  --color-background: #0b0d12;
+  --color-surface: #12151d;
+  --color-surface-muted: #191e28;
+  --color-foreground: #e8eaee;
+  --color-muted-foreground: #9aa3b2;
+  --color-border: #262c3a;
+  --color-border-strong: #3a4254;
+  --color-primary: #ffb020;
+  --color-primary-hover: #ffc145;
+  --color-primary-active: #e69b10;
+  --color-on-primary: #171208;
+  --color-primary-soft: #2e2410;
+  --color-link: #85b6ff;
+  --color-link-hover: #a9ccff;
+  --color-success-bg: #16302a;
+  --color-success-fg: #9fddbd;
+  --color-warning-bg: #332a18;
+  --color-warning-fg: #e8ce96;
   --color-warning-border: #a8894a;
-  --color-ring: #8db4f5;
+  --color-ring: #ffb020;
   --color-star: #e3b341;
   --shadow-card: none;
-  --shadow-card-hover: 0 4px 12px rgb(0 0 0 / 0.3);
+  --shadow-card-hover: 0 4px 12px rgb(0 0 0 / 0.4);
+  --shadow-modal: 0 12px 32px rgb(0 0 0 / 0.5);
 
-  --radius: 0.5rem;
-  --radius-lg: 0.75rem;
+  --radius: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -34,7 +39,8 @@
   --space-6: 2rem;
   --space-7: 3rem;
 
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'Chakra Petch', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Russo One', 'Chakra Petch', system-ui, sans-serif;
 }
 
 *,
@@ -57,22 +63,31 @@ body {
   color: var(--color-foreground);
   font-family: var(--font-sans);
   font-size: 1rem;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 h1 {
-  font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(1.375rem, 1.2rem + 0.8vw, 1.75rem);
   line-height: 1.2;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.01em;
 }
 
 h2 {
-  font-size: 1.25rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.125rem;
   line-height: 1.3;
+  letter-spacing: 0.01em;
 }
 
 a {
   color: var(--color-link);
+}
+
+a:hover {
+  color: var(--color-link-hover);
 }
 
 img {
