@@ -93,7 +93,8 @@ type DialogKind = 'login' | 'username' | 'password';
       color: var(--color-foreground);
       background: var(--color-surface);
       border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-modal);
     }
     dialog::backdrop {
       background: rgb(0 0 0 / 0.6);

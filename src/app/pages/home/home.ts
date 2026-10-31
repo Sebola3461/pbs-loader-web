@@ -17,11 +17,18 @@ import { SITE_LINKS } from '../../site-links';
     <app-mod-browser ngSkipHydration />
   `,
   styles: `
+    /* Linha âmbar de painel: o "farol" que ancora a marca (DESIGN.md, hero da home). */
     .hero {
       margin-block: var(--space-6) var(--space-5);
+      padding-top: var(--space-4);
+      border-top: 3px solid var(--color-primary);
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 1.4rem + 2.5vw, 3rem);
+      line-height: 1.1;
     }
     .lead {
-      margin-top: var(--space-1);
+      margin-top: var(--space-2);
       max-width: 60ch;
       color: var(--color-muted-foreground);
     }
