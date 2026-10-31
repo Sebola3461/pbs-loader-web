@@ -39,10 +39,12 @@ test('hashPassword produz o formato que o servidor lê', async () => {
   assert.equal(btoa(String.fromCharCode(...new Uint8Array(bits))), digest);
 });
 
-test('buildAdminSql escapa apóstrofos e traz transação', () => {
+test('buildAdminSql escapa apóstrofos e vira duas instruções executáveis', () => {
   const sql = buildAdminSql({ username: "Miku'O", key: "miku'o", passwordHash: 'pbkdf2$sha256$1$a$b' });
-  assert.match(sql, /^BEGIN;/);
-  assert.match(sql, /COMMIT;$/);
+  // O D1 rejeita BEGIN explícito no execute: o SQL tem de rodar como instruções soltas.
+  assert.doesNotMatch(sql, /BEGIN|COMMIT/);
+  assert.match(sql, /^INSERT INTO users/);
+  assert.match(sql, /INSERT INTO user_events/);
   assert.match(sql, /'Miku''O'/);
   assert.match(sql, /'miku''o'/);
   assert.match(sql, /'pbkdf2\$sha256\$1\$a\$b'/);

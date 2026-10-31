@@ -11,9 +11,12 @@
 
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
+import { writeFileSync } from 'node:fs';
 
 const DEFAULT_USERNAME = 'HatsuneMiku';
-const DEFAULT_ITERATIONS = 600_000;
+/** Mesmo valor de PBKDF2_ITERATIONS em produção (wrangler.toml): 600k estoura a CPU do plano free,
+ *  e cada login do admin pagaria esse preço. O formato da hash guarda as iterações usadas. */
+const DEFAULT_ITERATIONS = 100_000;
 
 /** Mesmas regras do servidor (server/users.ts): NFKC, 3 a 24 pontos, sem espaço duplo. */
 export function normalizeUsername(raw) {
@@ -62,16 +65,14 @@ export function uuidv7(now) {
 
 const sqlLiteral = (value) => `'${String(value).replaceAll("'", "''")}'`;
 
-/** Monta o INSERT do admin + o evento de criação, dentro de uma transação. */
+/** INSERT do admin + o evento de criação. Sem BEGIN/COMMIT: o D1 rejeita transação explícita no execute. */
 export function buildAdminSql({ username, key, passwordHash, now = new Date(), id = uuidv7(now) }) {
   const at = now.toISOString();
   return [
-    'BEGIN;',
     `INSERT INTO users (id, username, username_key, password_hash, role, status, created_at, updated_at)
      VALUES (${sqlLiteral(id)}, ${sqlLiteral(username)}, ${sqlLiteral(key)}, ${sqlLiteral(passwordHash)}, 'admin', 'active', ${sqlLiteral(at)}, ${sqlLiteral(at)});`,
     `INSERT INTO user_events (user_id, actor_id, operation, created_at)
      VALUES (${sqlLiteral(id)}, ${sqlLiteral(id)}, 'create', ${sqlLiteral(at)});`,
-    'COMMIT;',
   ].join('\n');
 }
 
@@ -109,11 +110,16 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replaceAll('\\',
   rl.close();
   const passwordHash = await hashPassword(password);
   const sql = buildAdminSql({ username, key, passwordHash });
-  console.log('\nRode uma das duas linhas abaixo (o SQL está entre aspas simples):');
+  // O SQL vai para arquivo: colado inline, o PowerShell interpola $sha256 como variável inexistente
+  // e o comando morre antes de tocar no banco — o admin nunca era criado.
+  const outFile = 'admin-bootstrap.sql';
+  writeFileSync(outFile, sql + '\n', 'utf8');
+  console.log(`\nSQL gravado em ${outFile} (não versionado; contém só a hash, nunca a senha).`);
+  console.log('Rode UMA das linhas abaixo, exatamente como está:');
   console.log('Local (desenvolvimento):');
-  console.log(`npx wrangler d1 execute pbs-loader-web --local --command ${JSON.stringify(sql)}`);
-  console.log('Remoto (produção, após criar o D1 de verdade):');
-  console.log(`npx wrangler d1 execute pbs-loader-web --remote --command ${JSON.stringify(sql)}`);
+  console.log(`npx wrangler d1 execute pbs-loader-web --local --file ${outFile}`);
+  console.log('Remoto (produção):');
+  console.log(`npx wrangler d1 execute pbs-loader-web --remote --file ${outFile}`);
   console.log('\nA senha não aparece em lugar nenhum — só a hash dela.');
 }
 

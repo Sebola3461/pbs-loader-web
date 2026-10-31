@@ -51,3 +51,6 @@ Thumbs.db
 
 # Segredos locais das Pages Functions (wrangler pages dev)
 .dev.vars
+
+# SQL de bootstrap do admin (contém a hash da senha do admin)
+/admin-bootstrap.sql
