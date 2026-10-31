@@ -7,7 +7,7 @@ pages_build_output_dir = "dist/pbs-loader-web/browser"
 [[d1_databases]]
 binding = "DB"
 database_name = "pbs-loader-web"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "5f61aad8-91ed-44b7-bfaf-18ae90e8e7e4"
 migrations_dir = "migrations"
 
 [vars]
