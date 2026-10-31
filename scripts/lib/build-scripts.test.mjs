@@ -99,9 +99,18 @@ test('inlineScriptHashes reconhece os tipos JS do HTML e não confunde data-type
 test('buildHeaders monta a CSP com os hashes sem repetir', () => {
   const headers = buildHeaders(["'sha256-b'", "'sha256-a'", "'sha256-b'"]);
   assert.match(headers, /^\/\*\n/);
-  assert.match(headers, /script-src 'self' 'sha256-a' 'sha256-b';/);
+  assert.match(
+    headers,
+    /script-src 'self' 'sha256-a' 'sha256-b' https:\/\/accounts\.google\.com\/gsi\/client;/,
+  );
   assert.match(headers, new RegExp(`img-src 'self' data: ${COVER_ORIGIN}`));
+  assert.match(headers, /frame-src https:\/\/accounts\.google\.com\/gsi\/;/);
+  assert.match(headers, /connect-src 'self' https:\/\/accounts\.google\.com\/gsi\/;/);
+  assert.match(
+    headers,
+    /style-src 'self' 'unsafe-inline' https:\/\/accounts\.google\.com\/gsi\/style;/,
+  );
   assert.match(headers, /frame-ancestors 'none'/);
   assert.match(headers, /X-Content-Type-Options: nosniff/);
-  assert.match(buildHeaders([]), /script-src 'self';/);
+  assert.match(buildHeaders([]), /script-src 'self' https:\/\/accounts\.google\.com\/gsi\/client;/);
 });

@@ -1,6 +1,7 @@
 import { externalMod, githubMod, SITE_OWNER } from '../../testing/catalog-fixtures';
 import {
   authorSlug,
+  bayesianScores,
   downloadLink,
   EMPTY_FILTERS,
   filterMods,
@@ -101,6 +102,50 @@ describe('catalog', () => {
       const copy = [...all];
       sortMods(all, 'nome');
       expect(all).toEqual(copy);
+    });
+  });
+
+  describe('avaliação', () => {
+    it('média bayesiana: poucos votos ficam perto da média geral', () => {
+      const score = bayesianScores({
+        Um: { count: 1, average: 5 },
+        Vinte: { count: 20, average: 4.8 },
+        Ruim: { count: 9, average: 2 },
+      });
+      expect(score('Vinte')).toBeGreaterThan(score('Um'));
+      expect(score('Um')).toBeGreaterThan(score('Ruim'));
+      expect(score('SemVoto')).toBeCloseTo((5 + 20 * 4.8 + 9 * 2) / 30);
+    });
+
+    it('sem nenhum voto, todos empatam em zero', () => {
+      expect(bayesianScores({})('Qualquer')).toBe(0);
+    });
+
+    it('"Melhor avaliados" ordena pela média bayesiana e desempata pelo nome', () => {
+      const stats = {
+        LinhaCentro: { count: 10, average: 4.6 },
+        SomDoMotor: { count: 1, average: 5 },
+        PainelDigital: { count: 10, average: 3 },
+      };
+      expect(sortMods(all, 'avaliacao', stats).map((m) => m.id)).toEqual([
+        'LinhaCentro',
+        'SomDoMotor',
+        'PainelDigital',
+      ]);
+      expect(sortMods(all, 'avaliacao').map((m) => m.nome)).toEqual([
+        'Mapa Linha Centro',
+        'Painel Digital',
+        'Som do Motor',
+      ]);
+    });
+
+    it('mod avaliado vem antes dos sem avaliação, mesmo empatando na média', () => {
+      const stats = { SomDoMotor: { count: 1, average: 5 } };
+      expect(sortMods(all, 'avaliacao', stats).map((m) => m.id)).toEqual([
+        'SomDoMotor',
+        'LinhaCentro',
+        'PainelDigital',
+      ]);
     });
   });
 

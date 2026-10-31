@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { externalMod, githubMod, provideCatalog } from '../../../testing/catalog-fixtures';
 import { CatalogMod } from '../../catalog/catalog.model';
+import { RatingsStore } from '../../session/ratings.store';
 import { ModCard } from './mod-card';
 
 function render(mod: CatalogMod) {
@@ -35,5 +36,19 @@ describe('ModCard', () => {
     expect(el.querySelector('img')?.getAttribute('alt')).toBe('');
     expect(el.querySelector('.badge-warning')).not.toBeNull();
     expect(el.querySelector('.badge-success')).toBeNull();
+  });
+
+  it('mostra a média e a contagem quando o mod tem avaliações', () => {
+    TestBed.configureTestingModule({ providers: [provideRouter([]), provideCatalog(githubMod())] });
+    TestBed.inject(RatingsStore).stats.set({ PainelDigital: { count: 12, average: 4.25 } });
+    const fixture = TestBed.createComponent(ModCard);
+    fixture.componentRef.setInput('mod', githubMod());
+    fixture.detectChanges();
+    const rating = (fixture.nativeElement as HTMLElement).querySelector('.rating');
+    expect(rating?.textContent?.replace(/\s+/g, ' ').trim()).toBe('★ 4,3 de 5, em (12)');
+  });
+
+  it('sem avaliações não mostra estrelas', () => {
+    expect(render(githubMod()).querySelector('.rating')).toBeNull();
   });
 });

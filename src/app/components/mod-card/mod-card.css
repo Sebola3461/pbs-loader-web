@@ -90,3 +90,12 @@
   color: var(--color-muted-foreground);
   font-size: 0.8125rem;
 }
+
+.rating {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.rating [aria-hidden='true'] {
+  color: var(--color-star);
+}

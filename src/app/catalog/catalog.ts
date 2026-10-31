@@ -11,14 +11,40 @@ export const MOD_TYPE_LABELS: Readonly<Record<ModType, string>> = {
 };
 
 /** Valores que aparecem na URL (?ordem=), por isso em português. */
-export const SORT_KEYS = ['recentes', 'nome', 'antigos'] as const;
+export const SORT_KEYS = ['recentes', 'avaliacao', 'nome', 'antigos'] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 
 export const SORT_LABELS: Readonly<Record<SortKey, string>> = {
   recentes: 'Atualizados recentemente',
+  avaliacao: 'Melhor avaliados',
   nome: 'Nome (A–Z)',
   antigos: 'Publicados há mais tempo',
 };
+
+export interface RatingSummary {
+  readonly count: number;
+  readonly average: number;
+}
+
+/** Quantos votos "imaginários" na média geral cada mod começa tendo. */
+const BAYES_PRIOR_VOTES = 5;
+
+/**
+ * Média bayesiana: puxa a média de quem tem poucos votos para a média geral, para um único voto 5 não passar à
+ * frente de vinte votos 4,8. Mod sem voto fica com a média geral.
+ */
+export function bayesianScores(
+  stats: Readonly<Record<string, RatingSummary>>,
+): (modId: string) => number {
+  const all = Object.values(stats);
+  const votes = all.reduce((sum, s) => sum + s.count, 0);
+  const mean = votes ? all.reduce((sum, s) => sum + s.average * s.count, 0) / votes : 0;
+  return (modId) => {
+    const s = stats[modId];
+    if (!s) return mean;
+    return (BAYES_PRIOR_VOTES * mean + s.average * s.count) / (BAYES_PRIOR_VOTES + s.count);
+  };
+}
 
 export interface ModFilters {
   readonly query: string;
@@ -83,10 +109,19 @@ function compareDates(a: string | null, b: string | null, direction: 1 | -1): nu
   return a < b ? -direction : direction;
 }
 
-export function sortMods(mods: readonly CatalogMod[], order: SortKey): CatalogMod[] {
+export function sortMods(
+  mods: readonly CatalogMod[],
+  order: SortKey,
+  stats: Readonly<Record<string, RatingSummary>> = {},
+): CatalogMod[] {
   const byName = (a: CatalogMod, b: CatalogMod) => compareNames(a.nome, b.nome);
   const sorted = [...mods];
   if (order === 'nome') return sorted.sort(byName);
+  if (order === 'avaliacao') {
+    const score = bayesianScores(stats);
+    const rated = (mod: CatalogMod) => (stats[mod.id] ? 1 : 0);
+    return sorted.sort((a, b) => rated(b) - rated(a) || score(b.id) - score(a.id) || byName(a, b));
+  }
   if (order === 'antigos') {
     return sorted.sort((a, b) => compareDates(a.criadoEm, b.criadoEm, 1) || byName(a, b));
   }

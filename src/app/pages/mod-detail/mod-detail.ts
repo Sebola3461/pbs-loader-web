@@ -8,12 +8,13 @@ import {
   MOD_TYPE_LABELS,
 } from '../../catalog/catalog';
 import { CatalogStore } from '../../catalog/catalog.store';
+import { StarRating } from '../../session/star-rating';
 import { SITE_LINKS } from '../../site-links';
 import { NotFound } from '../not-found/not-found';
 
 @Component({
   selector: 'app-mod-detail',
-  imports: [RouterLink, NotFound],
+  imports: [RouterLink, NotFound, StarRating],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './mod-detail.html',
   styleUrl: './mod-detail.css',

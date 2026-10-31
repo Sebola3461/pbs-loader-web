@@ -1,0 +1,16 @@
+name = "pbs-loader-web"
+compatibility_date = "2026-10-01"
+pages_build_output_dir = "dist/pbs-loader-web/browser"
+
+# O database_id real sai de "npx wrangler d1 create pbs-loader-web" (ver README). Para rodar local, qualquer id
+# serve: o D1 local fica em .wrangler/.
+[[d1_databases]]
+binding = "DB"
+database_name = "pbs-loader-web"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[vars]
+CATALOG_URL = "https://sebola3461.github.io/pbs-loader-catalogo/community-catalog.json"
+# Público (vai para o navegador). Preencha com o OAuth client ID do Google Cloud.
+GOOGLE_CLIENT_ID = ""

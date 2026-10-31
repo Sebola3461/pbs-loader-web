@@ -45,3 +45,6 @@ Thumbs.db
 
 # Catálogo baixado no build (scripts/fetch-catalog.mjs)
 /src/generated
+
+# Estado local do wrangler (D1 local, cache)
+/.wrangler

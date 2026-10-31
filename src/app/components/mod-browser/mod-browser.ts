@@ -16,6 +16,7 @@ import {
 } from '../../catalog/catalog';
 import { MOD_TYPES } from '../../catalog/catalog.model';
 import { CatalogStore } from '../../catalog/catalog.store';
+import { RatingsStore } from '../../session/ratings.store';
 import { SITE_LINKS } from '../../site-links';
 import { ModCard } from '../mod-card/mod-card';
 
@@ -38,6 +39,7 @@ export class ModBrowser {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   protected readonly store = inject(CatalogStore);
+  private readonly ratings = inject(RatingsStore);
 
   // Só os tipos que existem no catálogo: uma opção que sempre dá zero resultado só atrapalha.
   protected readonly types = MOD_TYPES.map((value) => ({
@@ -54,7 +56,11 @@ export class ModBrowser {
   private readonly state = signal(this.fromParams(this.route.snapshot.queryParamMap));
   protected readonly filters = this.state.asReadonly();
   protected readonly results = computed(() =>
-    sortMods(filterMods(this.store.mods, this.filters()), this.filters().sort),
+    sortMods(
+      filterMods(this.store.mods, this.filters()),
+      this.filters().sort,
+      this.ratings.stats(),
+    ),
   );
   protected readonly filtered = computed(() => hasActiveFilters(this.filters()));
   protected readonly panelFilterCount = computed(() => {

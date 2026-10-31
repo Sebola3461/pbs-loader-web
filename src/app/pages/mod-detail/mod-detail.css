@@ -114,6 +114,9 @@
 .facts dl {
   display: grid;
   gap: var(--space-1);
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
 }
 
 .facts dt {

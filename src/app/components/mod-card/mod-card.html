@@ -28,6 +28,13 @@
     </p>
     <p class="description">{{ mod().descricao }}</p>
     <p class="meta">
+      @if (rating(); as r) {
+        <span class="rating">
+          <span aria-hidden="true">★</span> {{ r.average }}
+          <span class="visually-hidden">de 5, em</span> ({{ r.count }})
+        </span>
+        <span aria-hidden="true">·</span>
+      }
       <span>Jogo {{ versions() }}</span>
       <span aria-hidden="true">·</span>
       <span><span class="visually-hidden">Atualizado em </span>{{ updated() }}</span>

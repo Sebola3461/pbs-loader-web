@@ -69,6 +69,7 @@
       </section>
 
       <aside class="facts" aria-label="Informações">
+        <app-star-rating [mod]="view.mod" />
         <dl>
           <dt>Versões do jogo</dt>
           <dd>{{ view.mod.versoesDoJogo.join(', ') }}</dd>

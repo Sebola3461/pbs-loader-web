@@ -1,3 +1,4 @@
+import { provideHttpClient, withFetch } from '@angular/common/http';
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideClientHydration } from '@angular/platform-browser';
 import { provideAppRouter } from './app.routes';
@@ -8,6 +9,7 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideAppRouter(),
     provideClientHydration(),
+    provideHttpClient(withFetch()),
     provideGeneratedCatalog(),
   ],
 };
