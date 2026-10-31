@@ -13,3 +13,7 @@ migrations_dir = "migrations"
 [vars]
 CATALOG_URL = "https://sebola3461.github.io/pbs-loader-catalogo/community-catalog.json"
 TURNSTILE_SITE_KEY = "0x4AAAAAAFuZKzOVidgelTKM"
+# Itens do PBKDF2 no hash de senha: 600k estoura o limite de CPU do plano free do Pages; com isso o
+# cadastro morre com 500. O formato da hash guarda as iterações usadas, então contas criadas aqui
+# continuam válidas se o número subir no futuro.
+PBKDF2_ITERATIONS = "100000"
