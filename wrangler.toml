@@ -12,8 +12,4 @@ migrations_dir = "migrations"
 
 [vars]
 CATALOG_URL = "https://sebola3461.github.io/pbs-loader-catalogo/community-catalog.json"
-# Chave pública do Turnstile (vai para o navegador). Esta é a chave de teste (sempre passa):
-# na produção, substitua no painel do Pages pelas chaves reais do domínio.
-TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
-# A chave SECRETA nunca vai aqui no repositório: em dev ela fica em .dev.vars (não versionado);
-# na produção, configure como variável cifrada/secret no painel do Pages.
+TURNSTILE_SITE_KEY = "0x4AAAAAAFuZKzOVidgelTKM"
