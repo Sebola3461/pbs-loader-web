@@ -14,6 +14,7 @@ import { AuthorPage } from './pages/author/author';
 import { Home } from './pages/home/home';
 import { ModDetail } from './pages/mod-detail/mod-detail';
 import { NotFound } from './pages/not-found/not-found';
+import { Submit } from './pages/submit/submit';
 
 const NOT_FOUND_TITLE = `Página não encontrada · ${SITE_NAME}`;
 
@@ -45,6 +46,14 @@ export const routes: Routes = [
     component: ModDetail,
     title: modTitle,
     resolve: { description: modDescription },
+  },
+  {
+    path: 'enviar',
+    component: Submit,
+    title: `Enviar mod · ${SITE_NAME}`,
+    data: {
+      description: 'Envie seu mod para o catálogo da comunidade do Proton Bus Simulator.',
+    },
   },
   {
     path: 'autores/:slug',

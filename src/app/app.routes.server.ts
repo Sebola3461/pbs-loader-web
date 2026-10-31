@@ -22,6 +22,7 @@ export const serverRoutes: ServerRoute[] = [
         slug,
       })),
   },
+  { path: 'enviar', renderMode: RenderMode.Prerender },
   // Gera o index.csr.html, que scripts/postbuild.mjs copia para 404.html: sem HTML pré-renderizado, o cliente
   // monta a página certa (mod removido, autor que saiu) sem hidratar sobre o DOM de outro componente.
   { path: '**', renderMode: RenderMode.Client },

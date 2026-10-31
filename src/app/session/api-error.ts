@@ -18,6 +18,13 @@ const MESSAGES: Record<string, string> = {
   too_many_changes: 'Muitas mudanças em pouco tempo. Tente de novo daqui a pouco.',
   catalog_unavailable: 'O catálogo está fora do ar. Tente de novo em instantes.',
   mod_not_found: 'Este mod não está mais no catálogo.',
+  invalid_mod_id:
+    'O id do mod deve ter de 2 a 64 letras, números, "_" ou "-", começando por letra ou número.',
+  invalid_payload: 'Tem campo inválido no formulário. Revise os dados e tente de novo.',
+  mod_exists: 'Já existe um mod com esse id no catálogo.',
+  not_owner: 'Este mod pertence a outra pessoa.',
+  forbidden: 'Você não tem permissão para isso.',
+  submission_limit: 'Você já fez 5 envios nas últimas 24 horas. Tente de novo amanhã.',
 };
 
 export function apiErrorMessage(error: unknown): string {

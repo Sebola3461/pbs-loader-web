@@ -179,9 +179,7 @@ describe('ModBrowser', () => {
   it('catálogo vazio convida a enviar o primeiro mod', async () => {
     const { el } = await render('/');
     expect(el.querySelector('.empty h3')?.textContent).toBe('Nenhum mod publicado ainda');
-    expect(el.querySelector('.empty a')?.getAttribute('href')).toContain(
-      'pbs-loader-catalogo#enviar-um-mod',
-    );
+    expect(el.querySelector('.empty a')?.getAttribute('href')).toBe('/enviar');
     expect(el.querySelector('.count')?.textContent?.trim()).toBe('0 mods');
   });
 });

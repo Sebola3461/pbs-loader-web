@@ -1,0 +1,159 @@
+<section class="submit">
+  @if (session.loaded() && !session.user()) {
+    <div class="panel">
+      <h1>Enviar mod</h1>
+      <p>
+        Entre com sua conta para enviar mods — use o botão <strong>Entrar</strong> no cabeçalho.
+      </p>
+      <a class="button button-secondary" routerLink="/">Voltar para os mods</a>
+    </div>
+  } @else if (sent(); as enviado) {
+    <div class="panel">
+      <h1>Envio recebido</h1>
+      <p>
+        <strong>{{ enviado.modId }}</strong> foi enviado para publicação. Ele aparece no catálogo
+        quando a validação do catálogo aceitar o envio.
+      </p>
+      <div class="form-actions">
+        <button type="button" class="button button-secondary" (click)="novo()">Enviar outro mod</button>
+        <a class="button" routerLink="/">Voltar para os mods</a>
+      </div>
+    </div>
+  } @else {
+    <h1>Enviar mod</h1>
+    <p class="lead">
+      O mod entra no catálogo depois de passar pela validação automática. O id é único e o endereço
+      da página leva o autor: duas pessoas podem ter mods de mesmo id.
+    </p>
+    <form class="form" (submit)="submit($event)">
+      <label for="id">Id do mod</label>
+      <input
+        id="id"
+        name="id"
+        type="text"
+        required
+        minlength="2"
+        maxlength="64"
+        pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,63}"
+        spellcheck="false"
+        autocomplete="off"
+        placeholder="Ex.: PainelDigital"
+      />
+      <p class="form-hint">
+        Identificador técnico, sem espaços: letras, números, "_" ou "-", começando por letra ou número.
+      </p>
+
+      <label for="nome">Nome</label>
+      <input id="nome" name="nome" type="text" required maxlength="80" placeholder="Ex.: Painel Digital" />
+
+      <label for="tipo">Tipo</label>
+      <select id="tipo" name="tipo" required>
+        @for (tipo of tipos; track tipo[0]) {
+          <option [value]="tipo[0]">{{ tipo[1] }}</option>
+        }
+      </select>
+
+      <label for="descricao">Descrição</label>
+      <textarea
+        id="descricao"
+        name="descricao"
+        rows="5"
+        required
+        maxlength="2000"
+        placeholder="O que o mod faz, como instalar e o que ele precisa."
+      ></textarea>
+
+      <label for="versoes">Versões do jogo</label>
+      <input id="versoes" name="versoes" type="text" required placeholder="Ex.: 307, 306" />
+      <p class="form-hint">Separadas por vírgula.</p>
+
+      <label for="dependencias">Dependências</label>
+      <input
+        id="dependencias"
+        name="dependencias"
+        type="text"
+        placeholder="Ex.: PBSLoaderCommonUtils"
+      />
+      <p class="form-hint">Ids de outros mods, separados por vírgula. Sem dependências, deixe vazio.</p>
+
+      <fieldset>
+        <legend>Origem do arquivo</legend>
+        <label class="radio">
+          <input
+            type="radio"
+            name="origem"
+            value="github"
+            [checked]="origem() === 'github'"
+            (change)="mudarOrigem($event)"
+          />
+          Release no GitHub
+        </label>
+        <label class="radio">
+          <input
+            type="radio"
+            name="origem"
+            value="externa"
+            [checked]="origem() === 'externa'"
+            (change)="mudarOrigem($event)"
+          />
+          Link externo
+        </label>
+      </fieldset>
+
+      @if (origem() === 'github') {
+        <label for="repo">Repositório (dono/nome)</label>
+        <input
+          id="repo"
+          name="repo"
+          type="text"
+          required
+          pattern="[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}"
+          spellcheck="false"
+          placeholder="Ex.: fulana/painel-digital"
+        />
+
+        <label for="tag">Prefixo da tag</label>
+        <input
+          id="tag"
+          name="tag"
+          type="text"
+          required
+          maxlength="64"
+          placeholder="Ex.: PainelDigital-v"
+        />
+        <p class="form-hint">O instalador procura a última release cuja tag começa com isso.</p>
+
+        <label for="arquivo">Arquivo</label>
+        <input
+          id="arquivo"
+          name="arquivo"
+          type="text"
+          required
+          maxlength="128"
+          placeholder="Ex.: PainelDigital.dll"
+        />
+      } @else {
+        <label for="url">Endereço do arquivo</label>
+        <input
+          id="url"
+          name="url"
+          type="url"
+          required
+          pattern="https://.*"
+          placeholder="https://…"
+        />
+        <p class="form-hint">Precisa ser um endereço https direto para o arquivo.</p>
+      }
+
+      <label for="pagina">Página do mod (opcional)</label>
+      <input id="pagina" name="pagina" type="url" pattern="https://.*" placeholder="https://…" />
+
+      <p #erro id="submit-erro" class="form-error" role="alert">{{ error() }}</p>
+      <div class="form-actions">
+        <button type="submit" class="button" [disabled]="busy()">
+          {{ busy() ? 'Enviando…' : 'Enviar mod' }}
+        </button>
+      </div>
+    </form>
+  }
+</section>

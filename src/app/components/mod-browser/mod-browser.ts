@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, ParamMap, Router } from '@angular/router';
+import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import {
   EMPTY_FILTERS,
   filterMods,
@@ -17,7 +17,6 @@ import {
 import { MOD_TYPES } from '../../catalog/catalog.model';
 import { CatalogStore } from '../../catalog/catalog.store';
 import { RatingsStore } from '../../session/ratings.store';
-import { SITE_LINKS } from '../../site-links';
 import { ModCard } from '../mod-card/mod-card';
 
 /** Marca as navegações feitas por este componente, para ele não reler a própria URL. */
@@ -30,7 +29,7 @@ const OWN_NAVIGATION = 'modBrowser';
  */
 @Component({
   selector: 'app-mod-browser',
-  imports: [ModCard],
+  imports: [ModCard, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './mod-browser.html',
   styleUrl: './mod-browser.css',
@@ -48,7 +47,6 @@ export class ModBrowser {
     count: this.store.mods.filter((m) => m.tipo === value).length,
   })).filter((type) => type.count > 0);
   protected readonly sorts = SORT_KEYS.map((value) => ({ value, label: SORT_LABELS[value] }));
-  protected readonly links = SITE_LINKS;
   protected readonly maxQueryLength = MAX_QUERY_LENGTH;
 
   // O estado local é a fonte; a URL é só o espelho. Se o campo de busca seguisse a URL, uma navegação atrasada
