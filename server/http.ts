@@ -35,13 +35,13 @@ export function requireSameOrigin(request: Request): void {
   if (origin !== new URL(request.url).origin) throw new HttpError(403, 'bad_origin');
 }
 
-/** Corpo JSON pequeno; Content-Type de formulário fica de fora para um <form> de outro site não chegar aqui. */
-export async function readJson(request: Request): Promise<unknown> {
+/** Corpo JSON pequeno por padrão; endpoints com anexo (capa do mod) passam um limite maior. */
+export async function readJson(request: Request, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
   if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) {
     throw new HttpError(415, 'json_required');
   }
   const text = await request.text();
-  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES)
+  if (new TextEncoder().encode(text).length > maxBytes)
     throw new HttpError(413, 'body_too_large');
   try {
     return JSON.parse(text);

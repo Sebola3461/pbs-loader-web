@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { afterEach, vi } from 'vitest';
 import { authorSlug } from '../../catalog/catalog';
 import { githubMod, provideCatalog } from '../../../testing/catalog-fixtures';
 import { SessionStore } from '../../session/session.store';
@@ -168,6 +169,80 @@ describe('Submit', () => {
     req.flush({ submission: { id: 's2', modId: 'Externo', status: 'pending', prNumber: null } });
     await fixture.whenStable();
     fixture.detectChanges();
+  });
+
+  it('capa escolhida vira WebP no navegador e vai no POST', async () => {
+    // Mesmos mocks do webp.spec: o jsdom não tem canvas nem createImageBitmap.
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(async () => ({ width: 1920, height: 1080, close: () => {} })),
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: () => {},
+    } as never);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((cb) =>
+      cb(new Blob([new Uint8Array(50)], { type: 'image/webp' })),
+    );
+    const { fixture, el, http } = await setup(ANA);
+    const input = el.querySelector('#capa') as HTMLInputElement;
+    Object.defineProperty(input, 'files', {
+      value: [new File([new Uint8Array(10)], 'capa.png', { type: 'image/png' })],
+    });
+    input.dispatchEvent(new Event('change'));
+    // O FileReader do jsdom roda em task própria: esperar capa ou erro aparecer de fato.
+    const interno = fixture.componentInstance as unknown as {
+      capa: () => { nome: string; base64: string } | null;
+      error: () => string | null;
+    };
+    await vi.waitFor(() => expect(interno.capa() ?? interno.error()).toBeTruthy(), { timeout: 2000 });
+    fixture.detectChanges();
+    const hints = [...el.querySelectorAll('.form-hint')].map((h) => h.textContent?.trim());
+    expect(hints.some((t) => t?.includes('capa.png convertida para WebP'))).toBe(true);
+
+    fill(el, FORM_DEFAULTS);
+    submitForm(el);
+    const req = http.expectOne('/api/submissions');
+    expect((req.request.body as Record<string, unknown>)['capaBase64']).toBeTruthy();
+    req.flush({ submission: { id: 's6', modId: 'Novo', status: 'pending', prNumber: null } });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('campo de capa voltando a vazio não quebra e limpa a escolha', async () => {
+    const { fixture, el } = await setup(ANA);
+    const input = el.querySelector('#capa') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [] });
+    input.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const hints = [...el.querySelectorAll('.form-hint')].map((h) => h.textContent?.trim());
+    expect(hints.some((t) => t?.includes('o navegador converte para WebP'))).toBe(true);
+  });
+
+  it('conversão da capa que falha mostra o erro e limpa a escolha', async () => {
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(async () => ({ width: 1920, height: 1080, close: () => {} })),
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null as never);
+    const { fixture, el } = await setup(ANA);
+    const input = el.querySelector('#capa') as HTMLInputElement;
+    Object.defineProperty(input, 'files', {
+      value: [new File([new Uint8Array(10)], 'capa.png', { type: 'image/png' })],
+    });
+    input.dispatchEvent(new Event('change'));
+    const interno = fixture.componentInstance as unknown as {
+      capa: () => { nome: string } | null;
+      error: () => string | null;
+    };
+    await vi.waitFor(() => expect(interno.error()).toBeTruthy(), { timeout: 2000 });
+    fixture.detectChanges();
+    expect(text(el, '.form-error')).toContain('não consegue converter');
+    expect(interno.capa()).toBeNull();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('modo edição pré-preenche o formulário e envia como edit', async () => {

@@ -15,6 +15,7 @@ import { MOD_TYPE_LABELS } from '../../catalog/catalog';
 import { CatalogStore } from '../../catalog/catalog.store';
 import { apiErrorMessage } from '../../session/api-error';
 import { SessionStore } from '../../session/session.store';
+import { converterParaWebp } from './webp';
 
 /** Formato do id de mod, igual ao que a API e o catálogo exigem. */
 const MOD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/;
@@ -82,6 +83,8 @@ export class Submit {
   protected readonly origem = signal<'github' | 'externa'>(
     (this.original()?.origem as 'github' | 'externa' | undefined) ?? 'github',
   );
+  protected readonly capa = signal<{ nome: string; base64: string } | null>(null);
+  protected readonly carregandoCapa = signal(false);
   protected readonly removing = signal(false);
   private readonly erro = viewChild<ElementRef<HTMLElement>>('erro');
   private readonly removeDialog = viewChild.required<ElementRef<HTMLDialogElement>>('removeDialog');
@@ -138,16 +141,40 @@ export class Submit {
           modId,
           idempotencyKey: this.idempotencyKey,
           mod,
+          capaBase64: this.capa()?.base64 ?? null,
         }),
       );
       this.sent.set({ modId: result.submission.modId, prNumber: result.submission.prNumber, removed: false });
-      // Envio aceito encerra a chave: a próxima operação nasce com chave própria.
+      // Envio aceito encerra a chave e a capa: a próxima operação nasce com chave própria.
       this.idempotencyKey = crypto.randomUUID();
+      this.capa.set(null);
       form.reset();
     } catch (error) {
       this.fail(apiErrorMessage(error));
     } finally {
       this.busy.set(false);
+    }
+  }
+
+  /** O arquivo escolhido vira WebP no navegador; o servidor só recebe os bytes prontos. */
+  protected async definirCapa(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) {
+      this.capa.set(null);
+      return;
+    }
+    this.carregandoCapa.set(true);
+    this.error.set(null);
+    try {
+      const base64 = await converterParaWebp(file);
+      this.capa.set({ nome: file.name, base64 });
+    } catch (error) {
+      this.capa.set(null);
+      input.value = '';
+      this.fail(error instanceof Error ? error.message : 'Não consegui converter a capa.');
+    } finally {
+      this.carregandoCapa.set(false);
     }
   }
 

@@ -14,6 +14,8 @@ export interface SubmissionForGithub {
   operation: 'publish' | 'edit' | 'remove' | 'hide';
   /** JSON canônico do mod; nulo em remove (nada a gravar) e em hide (o conteúdo vem do próprio repo). */
   payload: string | null;
+  /** Bytes da capa em base64; gravados num segundo commit, antes de abrir o PR (o head do PR já leva os dois). */
+  coverBase64: string | null;
 }
 
 interface GithubFile {
@@ -202,7 +204,6 @@ export async function publishToGithub(
   await assertNoOpenPullRequest(token, fetchImpl, row.modId);
   const base = await defaultBranch(token, fetchImpl);
   const branch = branchOf(row.modId);
-  // 422 aqui é o branch de um envio anterior que sobrou: reutilizar o que existe.
   await call(token, fetchImpl, `/repos/${CATALOG_REPO}/git/refs`, {
     method: 'POST',
     body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: await branchHead(token, fetchImpl, base) }),
@@ -215,6 +216,21 @@ export async function publishToGithub(
     await deleteFile(token, fetchImpl, row, branch, existing as GithubFile);
   } else {
     await putFile(token, fetchImpl, row, branch, content, existing);
+  }
+  if (row.coverBase64 && (row.operation === 'publish' || row.operation === 'edit')) {
+    // Os dois commits acontecem antes do PR abrir: o head do PR já leva JSON e capa, sem corrida de validação.
+    const coverPath = `/repos/${CATALOG_REPO}/contents/covers/${row.modId}.webp`;
+    const resposta = await call(token, fetchImpl, `${coverPath}?ref=${branch}`);
+    const atual = resposta.status === 404 ? null : await okJson<GithubFile>(resposta);
+    await call(token, fetchImpl, coverPath, {
+      method: 'PUT',
+      body: JSON.stringify({
+        message: `Capa de ${row.modId} (via site, user: ${row.userId}, operação: ${row.operation})`,
+        content: row.coverBase64,
+        branch,
+        ...(atual ? { sha: atual.sha } : {}),
+      }),
+    });
   }
   const prNumber = await openPullRequest(token, fetchImpl, row, base);
   return { prNumber };

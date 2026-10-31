@@ -33,8 +33,8 @@ async function setup() {
   const ana = (await registerUser(db, 'Ana', 'ana', FAKE_HASH, NOW)) as User;
   const bia = (await registerUser(db, 'Bia', 'bia', FAKE_HASH, NOW)) as User;
   const mods = new Map<string, CatalogEntry>([
-    ['Painel', { id: 'Painel', dono: { github: 'fulana' } }],
-    ['Mapa', { id: 'Mapa', dono: { site: bia.id } }],
+    ['Painel', { id: 'Painel', dono: { github: 'fulana' }, capa: null }],
+    ['Mapa', { id: 'Mapa', dono: { site: bia.id }, capa: null }],
   ]);
   const events = () =>
     db.raw.prepare('SELECT user_id, mod_id, operation, stars FROM rating_events ORDER BY id').all();

@@ -14,6 +14,8 @@ export const MOD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/;
 export interface CatalogEntry {
   id: string;
   dono: { github?: string; site?: string };
+  /** Caminho da capa no repo, para a edição preservar a capa quando o autor não manda outra. */
+  capa: string | null;
 }
 
 interface Cache {

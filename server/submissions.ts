@@ -14,6 +14,29 @@ type Operation = (typeof OPERATIONS)[number];
 /** Capa vem como caminho relativo do catálogo ("covers/<nome>.webp"); nada de URL externa nem outro formato. */
 const CAPA_PATH = /^covers\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}\.webp$/;
 
+/** O catálogo recusa PR com capa acima disso (mesmo limite do rules.mjs de lá). */
+export const MAX_COVER_BYTES = 300 * 1024;
+
+/**
+ * Valida os bytes da capa mandados em base64: tem de ser WebP (assinatura RIFF/WEBP) e caber no limite.
+ * O caminho do arquivo NUNCA vem do cliente — é derivado do id do mod (covers/<id>.webp).
+ */
+function capaValida(base64: unknown): string | null {
+  if (base64 === undefined || base64 === null) return null;
+  if (typeof base64 !== 'string' || base64.length === 0) invalidPayload();
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  } catch {
+    invalidPayload();
+  }
+  if (bytes.length > MAX_COVER_BYTES) invalidPayload();
+  const riff = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46;
+  const webp = bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+  if (!riff || !webp) invalidPayload();
+  return base64;
+}
+
 /**
  * Grava a submissão no repo do catálogo e devolve o número do PR. Falha com HttpError de código estável
  * (github_unavailable, pr_conflict): a linha vira failed e o reenvio com a mesma chave repete a publicação.
@@ -24,6 +47,7 @@ export type Publisher = (row: {
   modId: string;
   operation: Operation;
   payload: string | null;
+  coverBase64: string | null;
 }) => Promise<{ prNumber: number }>;
 
 interface SubmissionInput {
@@ -31,6 +55,7 @@ interface SubmissionInput {
   modId: string;
   key: string;
   payloadText: string | null;
+  cover: string | null;
 }
 
 interface SubmissionRow {
@@ -107,9 +132,14 @@ const REPO = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/;
 /**
  * Monta o JSON canônico do mod a partir do que o cliente mandou. Dono vira a conta logada (site), autor vira o
  * username, e confiável e datas ficam fora do controle do cliente: quem concede confiança é a moderação, e as
- * datas nascem do histórico do Git no catálogo.
+ * datas nascem do histórico do Git no catálogo. O caminho da capa também é do servidor (covers/<id>.webp).
  */
-function modPayloadFrom(raw: unknown, user: User, modId: string): Record<string, unknown> {
+function modPayloadFrom(
+  raw: unknown,
+  user: User,
+  modId: string,
+  capa: string | null,
+): Record<string, unknown> {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) invalidPayload();
   const mod = raw as Record<string, unknown>;
   const id = str(mod.id, 2, 64);
@@ -117,8 +147,14 @@ function modPayloadFrom(raw: unknown, user: User, modId: string): Record<string,
   const tipo = mod.tipo;
   if (typeof tipo !== 'string' || !MOD_TYPES.includes(tipo as ModType)) invalidPayload();
   const pagina = mod.pagina === null ? null : httpsUrl(mod.pagina);
-  const capa = mod.capa ?? null;
-  if (capa !== null && (typeof capa !== 'string' || !CAPA_PATH.test(capa))) invalidPayload();
+  const capaInformada = mod.capa ?? null;
+  if (
+    capaInformada !== null &&
+    (typeof capaInformada !== 'string' || !CAPA_PATH.test(capaInformada))
+  ) {
+    invalidPayload();
+  }
+  void capaInformada; // O caminho real é derivado do id pelo chamador; o que o cliente manda é ignorado.
   const source =
     mod.origem === 'github'
       ? githubSource(mod, tipo)
@@ -144,22 +180,28 @@ function modPayloadFrom(raw: unknown, user: User, modId: string): Record<string,
 }
 
 /** Valida o corpo do envio e devolve o que o resto do fluxo usa; qualquer desvio vira 400 estável. */
-function readSubmission(body: unknown, user: User): SubmissionInput {
+function readSubmission(
+  body: unknown,
+  user: User,
+  modId: string,
+  capaAtual: string | null,
+): SubmissionInput {
   const operation = field(body, 'operation');
   if (typeof operation !== 'string' || !OPERATIONS.includes(operation as Operation)) {
     throw new HttpError(400, 'invalid_operation');
   }
-  const modId = field(body, 'modId');
-  if (typeof modId !== 'string' || !MOD_ID.test(modId)) throw new HttpError(400, 'invalid_mod_id');
   const key = field(body, 'idempotencyKey');
   if (typeof key !== 'string' || key.length < 8 || key.length > 64) {
     throw new HttpError(400, 'invalid_idempotency_key');
   }
+  const cover = capaValida(field(body, 'capaBase64'));
+  // Capa nova sobrescreve; sem capa nova, a edição preserva a capa atual e a publicação nasce sem capa.
+  const capa = cover ? `covers/${modId}.webp` : (operation === 'edit' ? capaAtual : null);
   const withPayload = operation === 'publish' || operation === 'edit';
   const payloadText = withPayload
-    ? JSON.stringify(modPayloadFrom(field(body, 'mod'), user, modId))
+    ? JSON.stringify(modPayloadFrom(field(body, 'mod'), user, modId, capa))
     : null;
-  return { operation: operation as Operation, modId, key, payloadText };
+  return { operation: operation as Operation, modId, key, payloadText, cover };
 }
 
 async function findReplayRow(db: Database, userId: string, key: string): Promise<SubmissionRow | null> {
@@ -246,7 +288,13 @@ async function publishRow(
   db: Database,
   userId: string,
   publish: Publisher,
-  row: { id: string; modId: string; operation: Operation; payload: string | null },
+  row: {
+    id: string;
+    modId: string;
+    operation: Operation;
+    payload: string | null;
+    coverBase64: string | null;
+  },
   at: string,
 ): Promise<RouteResult> {
   try {
@@ -293,7 +341,10 @@ export async function recordSubmission(
   now: Date,
   publish?: Publisher,
 ): Promise<RouteResult> {
-  const input = readSubmission(body, user);
+  const modId = field(body, 'modId');
+  if (typeof modId !== 'string' || !MOD_ID.test(modId)) throw new HttpError(400, 'invalid_mod_id');
+  const capaAtual = mods.get(modId)?.capa ?? null;
+  const input = readSubmission(body, user, modId, capaAtual);
   const existing = await findReplayRow(db, user.id, input.key);
   if (existing) {
     ensureSameIntent(existing, input);
@@ -321,7 +372,13 @@ export async function recordSubmission(
     db,
     user.id,
     publish,
-    { id: inserted.id, modId: input.modId, operation: input.operation, payload: input.payloadText },
+    {
+      id: inserted.id,
+      modId: input.modId,
+      operation: input.operation,
+      payload: input.payloadText,
+      coverBase64: input.cover,
+    },
     at,
   );
 }
@@ -347,7 +404,13 @@ async function settleRow(
     db,
     user.id,
     publish,
-    { id: row.id, modId: input.modId, operation: input.operation, payload: input.payloadText },
+    {
+      id: row.id,
+      modId: input.modId,
+      operation: input.operation,
+      payload: input.payloadText,
+      coverBase64: input.cover,
+    },
     at,
   );
 }

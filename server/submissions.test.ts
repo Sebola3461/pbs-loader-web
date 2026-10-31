@@ -45,6 +45,14 @@ const body = (overrides: Record<string, unknown> = {}) => ({
 const publish = (modId: string, n: number) =>
   body({ modId, idempotencyKey: `chave-${String(n).padStart(4, '0')}`, mod: validMod({ id: modId }) });
 
+/** WebP de mentira: só a assinatura RIFF....WEBP que a validação confere. */
+const FAKE_WEBP = (() => {
+  const bytes = new Uint8Array(32);
+  bytes.set([0x52, 0x49, 0x46, 0x46], 0);
+  bytes.set([0x57, 0x45, 0x42, 0x50], 8);
+  return btoa(String.fromCharCode(...bytes));
+})();
+
 async function setup() {
   const db = createTestDatabase();
   const ana = await registerUser(db, 'Ana', 'ana', FAKE_HASH, NOW);
@@ -55,8 +63,8 @@ async function setup() {
     role: 'moderator',
   };
   const mods = new Map<string, CatalogEntry>([
-    ['Painel', { id: 'Painel', dono: { github: 'fulana' } }],
-    ['Mapa', { id: 'Mapa', dono: { site: bia.id } }],
+    ['Painel', { id: 'Painel', dono: { github: 'fulana' }, capa: null }],
+    ['Mapa', { id: 'Mapa', dono: { site: bia.id }, capa: 'covers/Mapa.webp' }],
   ]);
   return { db, ana, bia, moderador, mods };
 }
@@ -86,7 +94,7 @@ describe('submissões', () => {
     const result = await recordSubmission(
       db,
       ana,
-      body({ mod: validMod({ dependencias: ['Painel'], pagina: 'https://exemplo.com/wiki', capa: 'covers/Novo.webp' }) }),
+      body({ mod: validMod({ dependencias: ['Painel'], pagina: 'https://exemplo.com/wiki', capa: 'covers/DeOutroMod.webp' }) }),
       mods,
       NOW,
     );
@@ -102,7 +110,8 @@ describe('submissões', () => {
       dono: { site: ana.id },
       dependencias: ['Painel'],
       pagina: 'https://exemplo.com/wiki',
-      capa: 'covers/Novo.webp',
+      // A capa mandada pelo cliente é ignorada: o caminho é sempre covers/<id>.webp, derivado no servidor.
+      capa: null,
       confiavel: false,
       criadoEm: null,
       atualizadoEm: null,
@@ -519,5 +528,62 @@ describe('submissões', () => {
       ),
     ).toBe('merged');
     expect(db.raw.prepare('SELECT status FROM submissions').get()).toEqual({ status: 'merged' });
+  });
+
+  it('capa válida vira covers/<id>.webp no payload e chega ao publicador', async () => {
+    const { db, ana, mods } = await setup();
+    let recebido: { coverBase64: string | null } | null = null;
+    const result = await recordSubmission(
+      db,
+      ana,
+      body({ capaBase64: FAKE_WEBP }),
+      mods,
+      NOW,
+      async (row) => {
+        recebido = row;
+        return { prNumber: 3 };
+      },
+    );
+    expect(result.response.status).toBe(201);
+    const row = db.raw.prepare('SELECT payload FROM submissions').get() as { payload: string };
+    expect(JSON.parse(row.payload).capa).toBe('covers/Novo.webp');
+    expect(recebido).toMatchObject({ coverBase64: FAKE_WEBP });
+  });
+
+  it('capa que não é WebP ou que estoura 300 KB é recusada', async () => {
+    const { db, ana, mods } = await setup();
+    await expectHttpError(
+      recordSubmission(db, ana, body({ capaBase64: btoa('definitivamente não é webp') }), mods, NOW),
+      400,
+      'invalid_payload',
+    );
+    let binario = '';
+    for (let i = 0; i < 300 * 1024 + 1; i++) binario += 'A';
+    await expectHttpError(
+      recordSubmission(db, ana, body({ capaBase64: btoa(binario) }), mods, NOW),
+      400,
+      'invalid_payload',
+    );
+  });
+
+  it('edição sem capa nova preserva a capa atual do catálogo', async () => {
+    const { db, bia, mods } = await setup();
+    const result = await recordSubmission(
+      db,
+      bia,
+      body({
+        operation: 'edit',
+        modId: 'Mapa',
+        idempotencyKey: 'chave-edit9',
+        mod: validMod({ id: 'Mapa', tipo: 'mapa', arquivo: 'Mapa.zip' }),
+      }),
+      mods,
+      NOW,
+    );
+    expect(result.response.status).toBe(201);
+    const row = db.raw
+      .prepare('SELECT payload FROM submissions WHERE mod_id = ?')
+      .get('Mapa') as { payload: string };
+    expect(JSON.parse(row.payload).capa).toBe('covers/Mapa.webp');
   });
 });

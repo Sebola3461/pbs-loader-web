@@ -222,7 +222,8 @@ export async function postSubmission(request: Request, env: Env, deps: Deps): Pr
   requireSameOrigin(request);
   const now = deps.now();
   const user = await requireUser(env.DB, request, now);
-  const body = await readJson(request);
+  // A capa vem em base64 no mesmo corpo: 300 KB de WebP viram ~400 KB de texto.
+  const body = await readJson(request, 512 * 1024);
   const mods = await catalogMods(env.CATALOG_URL ?? DEFAULT_CATALOG_URL, {
     fetchImpl: deps.fetchImpl,
     now: now.getTime(),

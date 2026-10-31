@@ -12,6 +12,7 @@ const ROW = {
   modId: 'Novo',
   operation: 'publish' as const,
   payload: '{"id":"Novo"}',
+  coverBase64: null,
 };
 
 /** Endpoints do caminho feliz de publish: arquivo novo (404 no GET) e PR 12. */
@@ -136,6 +137,26 @@ describe('cliente do GitHub', () => {
     });
     await publishToGithub(TOKEN, fetcher.impl, { ...ROW, operation: 'hide' });
     expect(JSON.parse(gravado)).toMatchObject({ id: 'Novo', nome: 'Mod', oculto: true });
+  });
+
+  it('publish com capa grava os dois arquivos e o PR nasce depois dos dois', async () => {
+    const capa = btoa('webp-fake');
+    const capaHandler = (request: Request) =>
+      request.method === 'PUT'
+        ? new Response('{}', { status: 201 })
+        : new Response('{"message":"Not Found"}', { status: 404 });
+    const fetcher = fakeFetch({
+      ...base(),
+      [`${REPO_API}/contents/covers/Novo.webp?ref=site/Novo`]: capaHandler,
+      [`${REPO_API}/contents/covers/Novo.webp`]: capaHandler,
+    });
+    const result = await publishToGithub(TOKEN, fetcher.impl, { ...ROW, coverBase64: capa });
+    expect(result.prNumber).toBe(12);
+    const capaPut = fetcher.calls.find((c) => c.method === 'PUT' && c.url.includes('/covers/'));
+    const body = JSON.parse(await capaPut!.request.text());
+    expect(body.content).toBe(capa);
+    expect(body.branch).toBe('site/Novo');
+    expect(body.sha).toBeUndefined();
   });
 
   it('estado do PR: merged, fechado e aberto; sem token não consulta', async () => {

@@ -216,6 +216,18 @@
         [value]="prefill()?.pagina ?? ''"
       />
 
+      <label for="capa">Capa (opcional)</label>
+      <input id="capa" name="capa" type="file" accept="image/*" (change)="definirCapa($event)" />
+      <p class="form-hint">
+        @if (capa(); as capaEscolhida) {
+          {{ capaEscolhida.nome }} convertida para WebP.
+        } @else if (editing()) {
+          Deixe vazio para manter a capa atual.
+        } @else {
+          JPG ou PNG: o navegador converte para WebP de até 300 KB antes de enviar.
+        }
+      </p>
+
       <p #erro id="submit-erro" class="form-error" role="alert">{{ error() }}</p>
       <div class="form-actions">
         <button type="submit" class="button" [disabled]="busy()">
