@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CatalogEntry, DEFAULT_CATALOG_URL, resetCatalogCache } from './catalog';
 import { Database, Statement } from './db';
+import { HttpError } from './http';
 import { Env } from './db';
 import { createSession } from './sessions';
 import { recordSubmission } from './submissions';
@@ -12,6 +13,10 @@ import { registerUser, User } from './users';
 const NOW = new Date('2026-10-30T12:00:00.000Z');
 const later = (ms: number) => new Date(NOW.getTime() + ms);
 const SITE = 'https://mods.example';
+const REPO_API = 'https://api.github.com/repos/Sebola3461/pbs-loader-catalogo';
+/** A busca de PR codifica ":" e "/" do head; as chaves do fakeFetch têm de bater com a URL final. */
+const pullsUrl = (modId: string) => `${REPO_API}/pulls?head=Sebola3461%3Asite%2F${modId}&state=open`;
+const contentsUrl = (modId: string) => `${REPO_API}/contents/mods/${modId}.json?ref=site/${modId}`;
 
 const validMod = (overrides: Record<string, unknown> = {}) => ({
   id: 'Novo',
@@ -354,26 +359,165 @@ describe('submissões', () => {
     ).toThrow(/CHECK constraint failed/);
   });
 
-  it('rota completa: sessão + catálogo do GitHub Pages + envio; catálogo fora do ar falha fechado', async () => {
+  it('rota completa: publica no GitHub, registra o PR e marca falha quando o GitHub cai', async () => {
     const { db, ana } = await setup();
     const token = await cookieFor(db, ana);
-    const env = { DB: db } as Env;
-    const request = post('/api/submissions', body(), token);
+    const env = { DB: db, GITHUB_TOKEN: 'token-teste' } as Env;
     const { postSubmission } = await import('./routes');
-
-    const fetcher = fakeFetch({
+    const catalog = {
       [DEFAULT_CATALOG_URL]: () =>
         new Response(JSON.stringify({ mods: [{ id: 'Painel', dono: { github: 'fulana' } }] })),
-    });
-    const ok = await postSubmission(request, env, { now: () => NOW, fetchImpl: fetcher.impl });
-    expect(ok.response.status).toBe(201);
+    };
+    const githubHappy = {
+      [REPO_API]: () => new Response(JSON.stringify({ default_branch: 'main' })),
+      [pullsUrl('Novo')]: () => new Response('[]'),
+      [`${REPO_API}/git/ref/heads/main`]: () =>
+        new Response(JSON.stringify({ object: { sha: 'sha-base' } })),
+      [`${REPO_API}/git/refs`]: () => new Response('{}', { status: 201 }),
+      [contentsUrl('Novo')]: (request: Request) =>
+        request.method === 'PUT'
+          ? new Response('{}', { status: 201 })
+          : new Response('{"message":"Not Found"}', { status: 404 }),
+      [`${REPO_API}/contents/mods/Novo.json`]: (request: Request) =>
+        request.method === 'PUT'
+          ? new Response('{}', { status: 201 })
+          : new Response('{"message":"Not Found"}', { status: 404 }),
+      [`${REPO_API}/pulls`]: () => new Response(JSON.stringify({ number: 12 }), { status: 201 }),
+    };
 
+    const ok = await postSubmission(
+      post('/api/submissions', body(), token),
+      env,
+      { now: () => NOW, fetchImpl: fakeFetch({ ...catalog, ...githubHappy }).impl },
+    );
+    expect(ok.response.status).toBe(201);
+    const result = (await ok.response.json()) as { submission: { prNumber: number } };
+    expect(result.submission.prNumber).toBe(12);
+    expect(
+      db.raw.prepare('SELECT status, pr_number FROM submissions WHERE mod_id = ?').get('Novo'),
+    ).toEqual({ status: 'pending', pr_number: 12 });
+
+    // Catálogo fora do ar: falha fechado antes de tocar o GitHub.
     resetCatalogCache();
-    const offline = post('/api/submissions', body({ idempotencyKey: 'chave-0002' }), token);
     await expectHttpError(
-      postSubmission(offline, env, { now: () => NOW, fetchImpl: fakeFetch({}).impl }),
+      postSubmission(
+        post(
+          '/api/submissions',
+          body({ modId: 'Outro', mod: validMod({ id: 'Outro' }), idempotencyKey: 'chave-0002' }),
+          token,
+        ),
+        env,
+        { now: () => NOW, fetchImpl: fakeFetch({}).impl },
+      ),
       503,
       'catalog_unavailable',
     );
+
+    // GitHub fora do ar: a submissão fica failed com o código; o reenvio com a mesma chave repete.
+    resetCatalogCache();
+    await expectHttpError(
+      postSubmission(
+        post('/api/submissions', body({ idempotencyKey: 'chave-0003' }), token),
+        env,
+        { now: () => NOW, fetchImpl: fakeFetch({ ...catalog }).impl },
+      ),
+      502,
+      'github_unavailable',
+    );
+    expect(
+      db.raw
+        .prepare('SELECT status, error_code FROM submissions WHERE idempotency_key = ?')
+        .all('chave-0003'),
+    ).toEqual([{ status: 'failed', error_code: 'github_unavailable' }]);
+  });
+
+  it('publicação bem-sucedida registra o número do PR na linha e na resposta', async () => {
+    const { db, ana, mods } = await setup();
+    const result = await recordSubmission(db, ana, body(), mods, NOW, async () => ({ prNumber: 42 }));
+    expect(result.response.status).toBe(201);
+    const resultBody = (await result.response.json()) as { submission: { prNumber: number } };
+    expect(resultBody.submission.prNumber).toBe(42);
+    expect(db.raw.prepare('SELECT status, pr_number FROM submissions').get()).toEqual({
+      status: 'pending',
+      pr_number: 42,
+    });
+  });
+
+  it('falha de publicação vira failed com o código e o reenvio com a mesma chave repete', async () => {
+    const { db, ana, mods } = await setup();
+    let tentativas = 0;
+    const falha = async () => {
+      tentativas++;
+      throw new HttpError(502, 'github_unavailable');
+    };
+    await expectHttpError(recordSubmission(db, ana, body(), mods, NOW, falha), 502, 'github_unavailable');
+    expect(tentativas).toBe(1);
+    expect(db.raw.prepare('SELECT status, error_code FROM submissions').get()).toEqual({
+      status: 'failed',
+      error_code: 'github_unavailable',
+    });
+
+    // O reenvio com a mesma chave repete a publicação: uma linha só, e a pendente volta com o PR.
+    const result = await recordSubmission(db, ana, body(), mods, NOW, async () => ({ prNumber: 9 }));
+    expect(result.response.status).toBe(201);
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM submissions').get()).toEqual({ n: 1 });
+    expect(db.raw.prepare('SELECT status, pr_number FROM submissions').get()).toEqual({
+      status: 'pending',
+      pr_number: 9,
+    });
+  });
+
+  it('plugin é distribuído como .dll; os outros tipos, como .zip', async () => {
+    const { db, ana, mods } = await setup();
+    await expectHttpError(
+      recordSubmission(db, ana, body({ mod: validMod({ tipo: 'mapa' }) }), mods, NOW),
+      400,
+      'invalid_payload',
+    );
+    const ok = await recordSubmission(
+      db,
+      ana,
+      body({
+        modId: 'MapaZip',
+        idempotencyKey: 'chave-mapa1',
+        mod: validMod({ id: 'MapaZip', tipo: 'mapa', arquivo: 'Mapa.zip' }),
+      }),
+      mods,
+      NOW,
+    );
+    expect(ok.response.status).toBe(201);
+  });
+
+  it('lista os envios do usuário e sincroniza o estado do PR', async () => {
+    const { db, ana, mods } = await setup();
+    await recordSubmission(db, ana, body(), mods, NOW, async () => ({ prNumber: 5 }));
+    const token = await cookieFor(db, ana);
+    const env = { DB: db, GITHUB_TOKEN: 'token-teste' } as Env;
+    const { getMySubmissions } = await import('./routes');
+    const call = (fetcher: ReturnType<typeof fakeFetch>) =>
+      getMySubmissions(
+        new Request(`${SITE}/api/me/submissions`, {
+          headers: { Cookie: `__Host-pbs_session=${token}` },
+        }),
+        env,
+        { now: () => NOW, fetchImpl: fetcher.impl },
+      );
+    const firstStatus = async (fetcher: ReturnType<typeof fakeFetch>) => {
+      const result = await call(fetcher);
+      const body = (await result.response.json()) as { submissions: Array<{ status: string }> };
+      return body.submissions[0].status;
+    };
+
+    expect(
+      await firstStatus(
+        fakeFetch({ [`${REPO_API}/pulls/5`]: () => new Response(JSON.stringify({ state: 'open', merged: false })) }),
+      ),
+    ).toBe('pending');
+    expect(
+      await firstStatus(
+        fakeFetch({ [`${REPO_API}/pulls/5`]: () => new Response(JSON.stringify({ state: 'closed', merged: true })) }),
+      ),
+    ).toBe('merged');
+    expect(db.raw.prepare('SELECT status FROM submissions').get()).toEqual({ status: 'merged' });
   });
 });

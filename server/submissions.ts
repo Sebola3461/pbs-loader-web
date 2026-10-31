@@ -14,12 +14,32 @@ type Operation = (typeof OPERATIONS)[number];
 /** Capa vem como caminho relativo do catálogo ("covers/<nome>.webp"); nada de URL externa nem outro formato. */
 const CAPA_PATH = /^covers\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}\.webp$/;
 
+/**
+ * Grava a submissão no repo do catálogo e devolve o número do PR. Falha com HttpError de código estável
+ * (github_unavailable, pr_conflict): a linha vira failed e o reenvio com a mesma chave repete a publicação.
+ */
+export type Publisher = (row: {
+  id: string;
+  userId: string;
+  modId: string;
+  operation: Operation;
+  payload: string | null;
+}) => Promise<{ prNumber: number }>;
+
+interface SubmissionInput {
+  operation: Operation;
+  modId: string;
+  key: string;
+  payloadText: string | null;
+}
+
 interface SubmissionRow {
   id: string;
   mod_id: string;
   operation: string;
   payload: string | null;
   status: string;
+  pr_number: number | null;
   created_at: string;
 }
 
@@ -30,6 +50,7 @@ function publicSubmission(row: SubmissionRow) {
     modId: row.mod_id,
     operation: row.operation,
     status: row.status,
+    prNumber: row.pr_number,
     createdAt: row.created_at,
   };
 }
@@ -71,10 +92,14 @@ function idList(raw: unknown): string[] {
   });
 }
 
-function githubSource(mod: Record<string, unknown>): Record<string, unknown> {
+function githubSource(mod: Record<string, unknown>, tipo: string): Record<string, unknown> {
   const repo = str(mod.repo, 3, 100);
   if (!REPO.test(repo)) invalidPayload();
-  return { origem: 'github', repo, tag: str(mod.tag, 1, 64), arquivo: str(mod.arquivo, 1, 128) };
+  const arquivo = str(mod.arquivo, 1, 128);
+  // O instalador só leva .dll para plugin e .zip para o resto: arquivo errado nasce rejeitado no catálogo.
+  const wanted = tipo === 'plugin' ? '.dll' : '.zip';
+  if (!arquivo.toLowerCase().endsWith(wanted)) invalidPayload();
+  return { origem: 'github', repo, tag: str(mod.tag, 1, 64), arquivo };
 }
 
 const REPO = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/;
@@ -96,7 +121,7 @@ function modPayloadFrom(raw: unknown, user: User, modId: string): Record<string,
   if (capa !== null && (typeof capa !== 'string' || !CAPA_PATH.test(capa))) invalidPayload();
   const source =
     mod.origem === 'github'
-      ? githubSource(mod)
+      ? githubSource(mod, tipo)
       : mod.origem === 'externa'
         ? { origem: mod.origem, url: httpsUrl(mod.url) }
         : invalidPayload();
@@ -118,48 +143,8 @@ function modPayloadFrom(raw: unknown, user: User, modId: string): Record<string,
   };
 }
 
-async function replay(
-  db: Database,
-  userId: string,
-  key: string,
-  operation: string,
-  modId: string,
-  payloadText: string | null,
-): Promise<RouteResult | null> {
-  const row = await db
-    .prepare('SELECT * FROM submissions WHERE user_id = ? AND idempotency_key = ?')
-    .bind(userId, key)
-    .first<SubmissionRow>();
-  if (!row) return null;
-  if (row.operation !== operation || row.mod_id !== modId || row.payload !== payloadText) {
-    throw new HttpError(409, 'idempotency_conflict');
-  }
-  return { response: json({ submission: publicSubmission(row) }), userId };
-}
-
-async function requireDailyQuota(db: Database, userId: string, now: Date): Promise<void> {
-  // A própria tabela submissions é o registro: contar linhas nas últimas 24h dispensa mais um contador.
-  // Duas submissões concorrentes no limite podem passar das 5; é trava anti-spam, não contabilidade.
-  const since = new Date(now.getTime() - DAY_MS).toISOString();
-  const row = await db
-    .prepare('SELECT COUNT(*) AS n FROM submissions WHERE user_id = ? AND created_at > ?')
-    .bind(userId, since)
-    .first<{ n: number }>();
-  if ((row?.n ?? 0) >= SUBMISSIONS_PER_DAY) throw new HttpError(429, 'submission_limit');
-}
-
-/**
- * Valida o envio, confere existência e posse no catálogo publicado e grava a submissão pending.
- * O reenvio com a mesma chave de idempotência devolve a submissão original: depois de um failed,
- * o cliente manda a mesma chave e não nasce um segundo PR.
- */
-export async function recordSubmission(
-  db: Database,
-  user: User,
-  body: unknown,
-  mods: Map<string, CatalogEntry>,
-  now: Date,
-): Promise<RouteResult> {
+/** Valida o corpo do envio e devolve o que o resto do fluxo usa; qualquer desvio vira 400 estável. */
+function readSubmission(body: unknown, user: User): SubmissionInput {
   const operation = field(body, 'operation');
   if (typeof operation !== 'string' || !OPERATIONS.includes(operation as Operation)) {
     throw new HttpError(400, 'invalid_operation');
@@ -174,13 +159,44 @@ export async function recordSubmission(
   const payloadText = withPayload
     ? JSON.stringify(modPayloadFrom(field(body, 'mod'), user, modId))
     : null;
+  return { operation: operation as Operation, modId, key, payloadText };
+}
 
-  const existing = await replay(db, user.id, key, operation, modId, payloadText);
-  if (existing) return existing;
+async function findReplayRow(db: Database, userId: string, key: string): Promise<SubmissionRow | null> {
+  return db
+    .prepare('SELECT * FROM submissions WHERE user_id = ? AND idempotency_key = ?')
+    .bind(userId, key)
+    .first<SubmissionRow>();
+}
 
-  await requireDailyQuota(db, user.id, now);
+/** Mesma chave com outra intenção é conflito, não replay: evita trocar o conteúdo por engano. */
+function ensureSameIntent(row: SubmissionRow, input: SubmissionInput): void {
+  if (row.operation !== input.operation || row.mod_id !== input.modId || row.payload !== input.payloadText) {
+    throw new HttpError(409, 'idempotency_conflict');
+  }
+}
 
-  const entry = mods.get(modId);
+function replayResponse(row: SubmissionRow, userId: string): RouteResult {
+  return { response: json({ submission: publicSubmission(row) }), userId };
+}
+
+async function requireDailyQuota(db: Database, userId: string, now: Date): Promise<void> {
+  // A própria tabela submissions é o registro: contar linhas nas últimas 24h dispensa mais um contador.
+  // Duas submissões concorrentes no limite podem passar das 5; é trava anti-spam, não contabilidade.
+  const since = new Date(now.getTime() - DAY_MS).toISOString();
+  const row = await db
+    .prepare('SELECT COUNT(*) AS n FROM submissions WHERE user_id = ? AND created_at > ?')
+    .bind(userId, since)
+    .first<{ n: number }>();
+  if ((row?.n ?? 0) >= SUBMISSIONS_PER_DAY) throw new HttpError(429, 'submission_limit');
+}
+
+/** Publicar cria mod novo; editar e remover exigem ser o dono; ocultar é papel de moderador. */
+function authorizeOperation(
+  operation: Operation,
+  entry: CatalogEntry | undefined,
+  user: User,
+): void {
   const moderator = user.role === 'moderator' || user.role === 'admin';
   if (operation === 'publish') {
     // Publicar cria mod novo: id que já existe no catálogo é conflito, não substituição silenciosa.
@@ -192,7 +208,14 @@ export async function recordSubmission(
   } else if (entry.dono.site !== user.id && !moderator) {
     throw new HttpError(403, 'not_owner');
   }
+}
 
+async function insertPendingRow(
+  db: Database,
+  user: User,
+  input: SubmissionInput,
+  now: Date,
+): Promise<{ id: string; raceWinner: SubmissionRow | null }> {
   const id = uuidv7(now);
   const at = now.toISOString();
   try {
@@ -202,20 +225,129 @@ export async function recordSubmission(
            (id, user_id, mod_id, operation, payload, idempotency_key, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
       )
-      .bind(id, user.id, modId, operation, payloadText, key, at, at)
+      .bind(id, user.id, input.modId, input.operation, input.payloadText, input.key, at, at)
       .run();
+    return { id, raceWinner: null };
   } catch (error) {
     if (!isUniqueViolation(error, 'submissions.user_id')) throw error;
-    // Corrida entre dois envios com a mesma chave: o primeiro vence, e comparar de novo dá o replay certo.
-    const winner = await replay(db, user.id, key, operation, modId, payloadText);
+    // Corrida entre dois envios com a mesma chave: o primeiro vence, e o segundo vira replay ou retry.
+    const winner = await findReplayRow(db, user.id, input.key);
     if (!winner) throw new HttpError(409, 'idempotency_conflict');
-    return winner;
+    ensureSameIntent(winner, input);
+    return { id: winner.id, raceWinner: winner };
   }
-  return {
-    response: json(
-      { submission: { id, modId, operation, status: 'pending', createdAt: at } },
-      { status: 201 },
-    ),
-    userId: user.id,
-  };
+}
+
+/**
+ * Publica a submissão no catálogo e registra o resultado na linha: PR aberto guarda pr_number, falha de
+ * publicação vira failed com o código estável — o reenvio com a mesma chave repete a publicação.
+ */
+async function publishRow(
+  db: Database,
+  userId: string,
+  publish: Publisher,
+  row: { id: string; modId: string; operation: Operation; payload: string | null },
+  at: string,
+): Promise<RouteResult> {
+  try {
+    const { prNumber } = await publish({ ...row, userId });
+    await db
+      .prepare('UPDATE submissions SET pr_number = ?, updated_at = ? WHERE id = ?')
+      .bind(prNumber, at, row.id)
+      .run();
+    return {
+      response: json(
+        { submission: { ...row, status: 'pending', createdAt: at, prNumber } },
+        { status: 201 },
+      ),
+      userId,
+    };
+  } catch (error) {
+    const code = error instanceof HttpError ? error.code : 'github_unavailable';
+    await db
+      .prepare("UPDATE submissions SET status = 'failed', error_code = ?, updated_at = ? WHERE id = ?")
+      .bind(code, at, row.id)
+      .run();
+    throw error;
+  }
+}
+
+/** Reenvio de uma submissão failed: volta a pending e repete a publicação, sem gastar quota nova. */
+async function retryPendingRow(db: Database, row: SubmissionRow, at: string): Promise<void> {
+  await db
+    .prepare("UPDATE submissions SET status = 'pending', error_code = NULL, pr_number = NULL, updated_at = ? WHERE id = ?")
+    .bind(at, row.id)
+    .run();
+}
+
+/**
+ * Valida o envio, confere existência e posse no catálogo publicado, grava a submissão pending e publica no
+ * repo do catálogo. O reenvio com a mesma chave devolve a submissão original (ou repete a publicação, quando
+ * ela falhou); sem o publisher, a linha fica pending sem PR — só os testes usam esse caminho.
+ */
+export async function recordSubmission(
+  db: Database,
+  user: User,
+  body: unknown,
+  mods: Map<string, CatalogEntry>,
+  now: Date,
+  publish?: Publisher,
+): Promise<RouteResult> {
+  const input = readSubmission(body, user);
+  const existing = await findReplayRow(db, user.id, input.key);
+  if (existing) {
+    ensureSameIntent(existing, input);
+    return settleRow(db, user, input, existing, now, publish);
+  }
+
+  await requireDailyQuota(db, user.id, now);
+  authorizeOperation(input.operation, mods.get(input.modId), user);
+  const inserted = await insertPendingRow(db, user, input, now);
+  if (inserted.raceWinner) {
+    // O gêmeo venceu a corrida: mesma decisão do replay — pending responde 200, failed repete a publicação.
+    return settleRow(db, user, input, inserted.raceWinner, now, publish);
+  }
+  const at = now.toISOString();
+  if (!publish) {
+    return {
+      response: json(
+        { submission: { id: inserted.id, modId: input.modId, operation: input.operation, status: 'pending', createdAt: at, prNumber: null } },
+        { status: 201 },
+      ),
+      userId: user.id,
+    };
+  }
+  return publishRow(
+    db,
+    user.id,
+    publish,
+    { id: inserted.id, modId: input.modId, operation: input.operation, payload: input.payloadText },
+    at,
+  );
+}
+
+/** Decide o destino de uma linha que já existe com a mesma intenção: pending responde, failed repete. */
+async function settleRow(
+  db: Database,
+  user: User,
+  input: SubmissionInput,
+  row: SubmissionRow,
+  now: Date,
+  publish?: Publisher,
+): Promise<RouteResult> {
+  if (row.status !== 'failed') return replayResponse(row, user.id);
+  // O reenvio com a mesma chave repete a publicação de uma submissão failed; não gasta quota nova
+  // (a tentativa original já contou) e a linha volta a pending antes do PR.
+  const at = now.toISOString();
+  await retryPendingRow(db, row, at);
+  if (!publish) {
+    return replayResponse({ ...row, status: 'pending', pr_number: null }, user.id);
+  }
+  return publishRow(
+    db,
+    user.id,
+    publish,
+    { id: row.id, modId: input.modId, operation: input.operation, payload: input.payloadText },
+    at,
+  );
 }

@@ -17,7 +17,7 @@ import { SessionStore } from '../../session/session.store';
 const MOD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/;
 
 interface SubmissionResult {
-  submission: { id: string; modId: string; status: string };
+  submission: { id: string; modId: string; status: string; prNumber: number | null };
 }
 
 /**
@@ -38,7 +38,7 @@ export class Submit {
   protected readonly tipos = Object.entries(MOD_TYPE_LABELS);
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
-  protected readonly sent = signal<{ modId: string } | null>(null);
+  protected readonly sent = signal<{ modId: string; prNumber: number | null } | null>(null);
   protected readonly origem = signal<'github' | 'externa'>('github');
   private readonly erro = viewChild<ElementRef<HTMLElement>>('erro');
   private idempotencyKey = crypto.randomUUID();
@@ -91,7 +91,7 @@ export class Submit {
           mod,
         }),
       );
-      this.sent.set({ modId: result.submission.modId });
+      this.sent.set({ modId: result.submission.modId, prNumber: result.submission.prNumber });
       // Envio aceito encerra a chave: o próximo mod nasce com chave própria.
       this.idempotencyKey = crypto.randomUUID();
       form.reset();

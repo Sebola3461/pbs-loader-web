@@ -14,6 +14,15 @@
         <strong>{{ enviado.modId }}</strong> foi enviado para publicação. Ele aparece no catálogo
         quando a validação do catálogo aceitar o envio.
       </p>
+      @if (enviado.prNumber) {
+        <p class="form-hint">
+          <a
+            [href]="'https://github.com/Sebola3461/pbs-loader-catalogo/pull/' + enviado.prNumber"
+            rel="noopener"
+            >Acompanhar o PR no GitHub</a
+          >
+        </p>
+      }
       <div class="form-actions">
         <button type="button" class="button button-secondary" (click)="novo()">Enviar outro mod</button>
         <a class="button" routerLink="/">Voltar para os mods</a>

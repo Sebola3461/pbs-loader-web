@@ -80,10 +80,11 @@ describe('Submit', () => {
       repo: 'ana/mod-novo',
       capa: null,
     });
-    req.flush({ submission: { id: 's1', modId: 'Novo', status: 'pending' } });
+    req.flush({ submission: { id: 's1', modId: 'Novo', status: 'pending', prNumber: 12 } });
     await fixture.whenStable();
     fixture.detectChanges();
     expect(text(el, '.panel p')).toContain('Novo foi enviado para publicação');
+    expect(el.querySelector('.panel .form-hint a')?.getAttribute('href')).toContain('/pull/12');
   });
 
   it('erro da API aparece no formulário e permite tentar de novo', async () => {
@@ -132,7 +133,7 @@ describe('Submit', () => {
       origem: 'externa',
       url: 'https://exemplo.com/mod.zip',
     });
-    req.flush({ submission: { id: 's2', modId: 'Externo', status: 'pending' } });
+    req.flush({ submission: { id: 's2', modId: 'Externo', status: 'pending', prNumber: null } });
     await fixture.whenStable();
     fixture.detectChanges();
   });

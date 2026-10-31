@@ -22,6 +22,8 @@ export interface Env {
   TURNSTILE_SITE_KEY?: string;
   /** Chave secreta do Turnstile; sem ela o cadastro e o login falham fechados (503). */
   TURNSTILE_SECRET_KEY?: string;
+  /** Token do bot no GitHub (escopo só no repo do catálogo); sem ele o envio falha fechado (503). */
+  GITHUB_TOKEN?: string;
   /** Itens de PBKDF2 opcional; para calibrar contra o limite de CPU do plano. */
   PBKDF2_ITERATIONS?: string;
 }

@@ -1,5 +1,6 @@
 import { catalogMods, DEFAULT_CATALOG_URL, MOD_ID } from './catalog';
 import { Env } from './db';
+import { publishToGithub, pullRequestState } from './github';
 import { field, HttpError, json, noContent, readJson, requireSameOrigin, RouteResult } from './http';
 import { hashPassword, iterationsFromEnv, normalizePassword, verifyPassword } from './password';
 import { modStats, ratingStats, removeRating, setRating, userRatings } from './ratings';
@@ -216,7 +217,7 @@ export async function deleteRating(
   };
 }
 
-/** POST /api/submissions: valida o envio, confere a posse no catálogo publicado e grava pending. */
+/** POST /api/submissions: valida, confere a posse, grava pending e publica no repo do catálogo. */
 export async function postSubmission(request: Request, env: Env, deps: Deps): Promise<RouteResult> {
   requireSameOrigin(request);
   const now = deps.now();
@@ -226,7 +227,57 @@ export async function postSubmission(request: Request, env: Env, deps: Deps): Pr
     fetchImpl: deps.fetchImpl,
     now: now.getTime(),
   });
-  return recordSubmission(env.DB, user, body, mods, now);
+  return recordSubmission(env.DB, user, body, mods, now, (row) =>
+    publishToGithub(env.GITHUB_TOKEN, deps.fetchImpl, row),
+  );
+}
+
+/** GET /api/me/submissions: os envios do usuário; os pendentes com PR conferem o estado no GitHub. */
+export async function getMySubmissions(
+  request: Request,
+  env: Env,
+  deps: Deps,
+): Promise<RouteResult> {
+  const user = await requireUser(env.DB, request, deps.now());
+  const rows = await env.DB
+    .prepare(
+      'SELECT id, mod_id, operation, status, pr_number, created_at, updated_at FROM submissions WHERE user_id = ? ORDER BY created_at DESC',
+    )
+    .bind(user.id)
+    .all<{
+      id: string;
+      mod_id: string;
+      operation: string;
+      status: string;
+      pr_number: number | null;
+      created_at: string;
+      updated_at: string;
+    }>();
+  const now = deps.now().toISOString();
+  const submissions = [];
+  for (const row of rows.results) {
+    let status = row.status;
+    if (row.status === 'pending' && row.pr_number) {
+      const state = await pullRequestState(env.GITHUB_TOKEN, deps.fetchImpl, row.pr_number);
+      if (state === 'merged' || state === 'closed') {
+        // O PR já decidiu: mergeou entra no catálogo, fechado sem merge foi recusado.
+        status = state === 'merged' ? 'merged' : 'rejected';
+        await env.DB
+          .prepare('UPDATE submissions SET status = ?, updated_at = ? WHERE id = ?')
+          .bind(status, now, row.id)
+          .run();
+      }
+    }
+    submissions.push({
+      id: row.id,
+      modId: row.mod_id,
+      operation: row.operation,
+      status,
+      prNumber: row.pr_number,
+      createdAt: row.created_at,
+    });
+  }
+  return { response: json({ submissions }), userId: user.id };
 }
 
 /**
