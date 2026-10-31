@@ -381,6 +381,8 @@ describe('Turnstile', () => {
     const session = renderForm();
     await session.fixture.whenStable();
     await new Promise((r) => setTimeout(r, 10));
+    // O foco começa no primeiro campo do formulário, não no primeiro focável (o link de alternância).
+    expect(document.activeElement?.id).toBe('usuario');
     expect(fake.rendered).toHaveLength(1);
     expect(fake.rendered[0].options.sitekey).toBe('cid');
     fake.rendered[0].options.callback('tok');
@@ -435,6 +437,8 @@ describe('Turnstile', () => {
     await settle();
     session.fixture.detectChanges();
     expect(session.el.querySelector('.form-error')?.textContent).toContain('incorretos');
+    // Depois de falhar o envio, o foco vai para o erro (acessível por teclado).
+    expect(document.activeElement?.id).toBe('login-erro');
     expect(fake.resets).toBe(1);
     expect(session.el.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(
       true,

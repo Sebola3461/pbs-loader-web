@@ -27,6 +27,7 @@ import { TurnstileApi, loadTurnstile } from './turnstile';
       <label for="usuario">Nome de usuário</label>
       <input
         id="usuario"
+        #usuario
         name="usuario"
         type="text"
         autocomplete="username"
@@ -50,7 +51,7 @@ import { TurnstileApi, loadTurnstile } from './turnstile';
         aria-describedby="login-erro"
       />
       <div #widget class="widget"></div>
-      <p id="login-erro" class="form-error" role="alert">{{ error() }}</p>
+      <p id="login-erro" #erro tabindex="-1" class="form-error" role="alert">{{ error() }}</p>
       <div class="form-actions">
         <button type="button" class="button-link" (click)="toggle()">
           {{ mode() === 'entrar' ? 'Criar conta' : 'Já tenho conta' }}
@@ -73,6 +74,8 @@ export class LoginForm {
   private readonly doc = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = viewChild.required<ElementRef<HTMLElement>>('widget');
+  private readonly usuarioInput = viewChild.required<ElementRef<HTMLInputElement>>('usuario');
+  private readonly erro = viewChild.required<ElementRef<HTMLElement>>('erro');
 
   readonly siteKey = input.required<string>();
 
@@ -84,7 +87,11 @@ export class LoginForm {
   private turnstile: TurnstileApi | null = null;
 
   constructor() {
-    afterNextRender(() => void this.render());
+    // O dialog nativo focaria o link de alternância (o submit nasce desabilitado); o foco começa no campo.
+    afterNextRender(() => {
+      this.usuarioInput().nativeElement.focus();
+      void this.render();
+    });
     // Sair da página tira o widget do DOM do Cloudflare, senão ele reclama do elemento órfão.
     this.destroyRef.onDestroy(() => {
       if (this.widgetId) this.turnstile?.remove(this.widgetId);
@@ -128,6 +135,8 @@ export class LoginForm {
       // O token do Turnstile vale uma tentativa só: erro de senha pede um novo desafio.
       if (this.widgetId) this.turnstile?.reset(this.widgetId);
       this.token.set(null);
+      // Erro tem de ser alcançável: o foco vai para ele depois de falhar o envio.
+      this.erro().nativeElement.focus();
     } finally {
       this.busy.set(false);
     }
