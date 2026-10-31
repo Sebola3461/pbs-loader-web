@@ -97,6 +97,7 @@
 
 .search {
   position: relative;
+  margin-top: var(--space-5);
   margin-bottom: var(--space-4);
 }
 
