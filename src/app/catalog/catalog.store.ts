@@ -16,8 +16,12 @@ export class CatalogStore {
   readonly authors: readonly Author[] = listAuthors(this.mods);
   readonly gameVersions: readonly string[] = listGameVersions(this.mods);
 
-  findMod(id: string): CatalogMod | null {
-    return this.mods.find((m) => m.id === id) ?? null;
+  /** Busca por id; com ownerSlug, exige que o dono bata — ids podem coexistir entre autores. */
+  findMod(id: string, ownerSlug?: string): CatalogMod | null {
+    return (
+      this.mods.find((m) => m.id === id && (!ownerSlug || authorSlug(m.dono) === ownerSlug)) ??
+      null
+    );
   }
 
   findAuthor(slug: string): Author | null {

@@ -48,7 +48,7 @@ describe('App', () => {
 
   it('página do mod com título e descrição do mod', async () => {
     const { page } = await start();
-    const { title, description, el } = await page('/mods/PainelDigital');
+    const { title, description, el } = await page('/mods/gh-fulana/PainelDigital');
     expect(title).toBe(`Painel Digital · ${SITE_NAME}`);
     expect(description).toBe('Painel digital para o ônibus.');
     expect(el.querySelector('h1')?.textContent).toBe('Painel Digital');
@@ -62,7 +62,7 @@ describe('App', () => {
       ],
     });
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/mods/PainelDigital');
+    await harness.navigateByUrl('/mods/gh-fulana/PainelDigital');
     const description = TestBed.inject(Meta).getTag('name="description"')?.content ?? '';
     expect(description.startsWith('Linha 1 Linha 2 xxx')).toBe(true);
     expect(description).toHaveLength(160);
@@ -70,7 +70,7 @@ describe('App', () => {
 
   it('a descrição do mod não sobra ao navegar para outra página', async () => {
     const { page } = await start();
-    await page('/mods/PainelDigital');
+    await page('/mods/gh-fulana/PainelDigital');
     expect((await page('/')).description).toBe(DEFAULT_DESCRIPTION);
   });
 
@@ -84,7 +84,7 @@ describe('App', () => {
 
   it('mod e autor que não existem', async () => {
     const { page } = await start();
-    expect(await page('/mods/Sumiu')).toMatchObject({
+    expect(await page('/mods/gh-fulana/Sumiu')).toMatchObject({
       title: `Mod não encontrado · ${SITE_NAME}`,
       description: 'Mod não encontrado no catálogo.',
     });

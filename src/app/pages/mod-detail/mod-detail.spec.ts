@@ -1,13 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { externalMod, githubMod, provideCatalog } from '../../../testing/catalog-fixtures';
+import { externalMod, githubMod, provideCatalog, SITE_OWNER } from '../../../testing/catalog-fixtures';
 import { CatalogMod } from '../../catalog/catalog.model';
 import { ModDetail } from './mod-detail';
 
-function render(id: string, ...mods: CatalogMod[]) {
+const GITHUB_SLUG = 'gh-fulana';
+const SITE_SLUG = `site-${SITE_OWNER}`;
+
+function render(id: string, autor: string, ...mods: CatalogMod[]) {
   TestBed.configureTestingModule({ providers: [provideRouter([]), provideCatalog(...mods)] });
   const fixture = TestBed.createComponent(ModDetail);
   fixture.componentRef.setInput('id', id);
+  fixture.componentRef.setInput('autor', autor);
   fixture.detectChanges();
   return { el: fixture.nativeElement as HTMLElement };
 }
@@ -22,7 +26,7 @@ describe('ModDetail', () => {
       dependencias: ['PBSLoaderCommonUtils', 'Lib'],
       capa: 'covers/PainelDigital.webp',
     });
-    const { el } = render('PainelDigital', painel, lib);
+    const { el } = render('PainelDigital', GITHUB_SLUG, painel, lib);
 
     expect(text(el, 'h1')).toBe('Painel Digital');
     expect(el.querySelector('.author a')?.getAttribute('href')).toBe('/autores/gh-fulana');
@@ -36,12 +40,12 @@ describe('ModDetail', () => {
 
     const deps = el.querySelectorAll('.facts dd')[1];
     expect(deps.textContent?.replace(/\s+/g, ' ').trim()).toBe('PBSLoaderCommonUtils, Lib');
-    expect(deps.querySelector('a')?.getAttribute('href')).toBe('/mods/Lib');
+    expect(deps.querySelector('a')?.getAttribute('href')).toBe('/mods/gh-fulana/Lib');
     expect(text(el, '.facts dd:nth-of-type(3)')).toBe('1 de setembro de 2026');
   });
 
   it('link externo avisa e não sugere o instalador', () => {
-    const { el } = render('LinhaCentro', externalMod());
+    const { el } = render('LinhaCentro', SITE_SLUG, externalMod());
     expect(text(el, '.actions a')).toBe('Abrir link externo');
     expect(el.querySelectorAll('.actions a')).toHaveLength(1);
     expect(text(el, '.notice-warning h3')).toBe('Arquivo fora do GitHub');
@@ -51,14 +55,26 @@ describe('ModDetail', () => {
   });
 
   it('autor confiável não mostra o aviso de revisão', () => {
-    const { el } = render('PainelDigital', githubMod({ confiavel: true }));
+    const { el } = render('PainelDigital', GITHUB_SLUG, githubMod({ confiavel: true }));
     expect(el.querySelector('.caution')).toBeNull();
     expect(text(el, '.badge-success')).toBe('Autor confiável');
   });
 
   it('mod que não existe mostra a página de não encontrado', () => {
-    const { el } = render('Sumiu', githubMod());
+    const { el } = render('Sumiu', GITHUB_SLUG, githubMod());
     expect(text(el, 'h1')).toBe('Mod não encontrado');
     expect(el.querySelector('app-not-found a')?.getAttribute('href')).toBe('/');
+  });
+
+  it('mods com o mesmo id coexistem: o autor do endereço escolhe qual mostrar', () => {
+    const deFulana = githubMod();
+    const deBeltrano = githubMod({ dono: { github: 'Beltrano' } });
+    const { el } = render('PainelDigital', 'gh-beltrano', deFulana, deBeltrano);
+    expect(el.querySelector('.author a')?.getAttribute('href')).toBe('/autores/gh-beltrano');
+  });
+
+  it('autor no endereço que não é o dono cai na página de não encontrado', () => {
+    const { el } = render('PainelDigital', 'gh-ninguem', githubMod());
+    expect(text(el, 'h1')).toBe('Mod não encontrado');
   });
 });

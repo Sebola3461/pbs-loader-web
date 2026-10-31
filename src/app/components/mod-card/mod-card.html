@@ -21,7 +21,7 @@
       }
     </div>
     <h3 class="title">
-      <a [routerLink]="['/mods', mod().id]" class="stretched">{{ mod().nome }}</a>
+      <a [routerLink]="['/mods', authorSlug(), mod().id]" class="stretched">{{ mod().nome }}</a>
     </h3>
     <p class="author">
       por <a [routerLink]="['/autores', authorSlug()]" class="author-link">{{ mod().autor }}</a>

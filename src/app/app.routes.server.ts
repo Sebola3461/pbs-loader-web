@@ -6,9 +6,13 @@ import { generatedCatalog } from './catalog/catalog.data';
 export const serverRoutes: ServerRoute[] = [
   { path: '', renderMode: RenderMode.Prerender },
   {
-    path: 'mods/:id',
+    path: 'mods/:autor/:id',
     renderMode: RenderMode.Prerender,
-    getPrerenderParams: async () => generatedCatalog.mods.map((mod) => ({ id: mod.id })),
+    getPrerenderParams: async () =>
+      generatedCatalog.mods.map((mod) => ({
+        autor: authorSlug(mod.dono),
+        id: mod.id,
+      })),
   },
   {
     path: 'autores/:slug',

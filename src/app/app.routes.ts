@@ -18,7 +18,7 @@ import { NotFound } from './pages/not-found/not-found';
 const NOT_FOUND_TITLE = `Página não encontrada · ${SITE_NAME}`;
 
 const modOf = (route: ActivatedRouteSnapshot) =>
-  inject(CatalogStore).findMod(route.params['id'] as string);
+  inject(CatalogStore).findMod(route.params['id'] as string, route.params['autor'] as string);
 const authorOf = (route: ActivatedRouteSnapshot) =>
   inject(CatalogStore).findAuthor(route.params['slug'] as string);
 
@@ -41,7 +41,7 @@ export const authorDescription: ResolveFn<string> = (route) => {
 export const routes: Routes = [
   { path: '', component: Home, title: SITE_NAME },
   {
-    path: 'mods/:id',
+    path: 'mods/:autor/:id',
     component: ModDetail,
     title: modTitle,
     resolve: { description: modDescription },

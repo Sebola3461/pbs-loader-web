@@ -77,7 +77,7 @@
           <dd>
             @for (dep of view.dependencies; track dep.id; let last = $last) {
               @if (dep.inCatalog) {
-                <a [routerLink]="['/mods', dep.id]">{{ dep.id }}</a>
+                <a [routerLink]="['/mods', dep.slug, dep.id]">{{ dep.id }}</a>
               } @else {
                 <span>{{ dep.id }}</span>
               }

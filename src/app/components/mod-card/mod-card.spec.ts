@@ -18,7 +18,7 @@ describe('ModCard', () => {
     const el = render(githubMod({ confiavel: true }));
     const title = el.querySelector<HTMLAnchorElement>('.title a')!;
     expect(title.textContent?.trim()).toBe('Painel Digital');
-    expect(title.getAttribute('href')).toBe('/mods/PainelDigital');
+    expect(title.getAttribute('href')).toBe('/mods/gh-fulana/PainelDigital');
     expect(el.querySelector('.author-link')?.getAttribute('href')).toBe('/autores/gh-fulana');
     expect(el.querySelector('img')).toBeNull();
     expect(el.querySelector('.badge')?.textContent?.trim()).toBe('Plugin');
