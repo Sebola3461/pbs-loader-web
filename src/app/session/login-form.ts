@@ -28,6 +28,7 @@ import { TurnstileApi, loadTurnstile } from './turnstile';
       <input
         id="usuario"
         name="usuario"
+        type="text"
         autocomplete="username"
         spellcheck="false"
         minlength="3"
@@ -49,8 +50,8 @@ import { TurnstileApi, loadTurnstile } from './turnstile';
         aria-describedby="login-erro"
       />
       <div #widget class="widget"></div>
-      <p id="login-erro" class="error" role="alert">{{ error() }}</p>
-      <div class="actions">
+      <p id="login-erro" class="form-error" role="alert">{{ error() }}</p>
+      <div class="form-actions">
         <button type="button" class="button-link" (click)="toggle()">
           {{ mode() === 'entrar' ? 'Criar conta' : 'Já tenho conta' }}
         </button>
@@ -60,47 +61,10 @@ import { TurnstileApi, loadTurnstile } from './turnstile';
       </div>
     </form>
   `,
+  // O resto do formulário (campos, erro, ações) usa o vocabulário global do design system (styles.css).
   styles: `
-    .form {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-      align-items: stretch;
-    }
-    h2 {
-      font-size: 1.125rem;
-    }
-    label {
-      font-size: 0.8125rem;
-      color: var(--color-muted-foreground);
-    }
-    input {
-      width: 100%;
-      min-height: 2.75rem;
-      padding: var(--space-2) var(--space-3);
-      font: inherit;
-      color: var(--color-foreground);
-      background: var(--color-background);
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius);
-    }
     .widget {
       min-height: 4.5rem;
-    }
-    .error {
-      min-height: 1.25rem;
-      font-size: 0.8125rem;
-      color: var(--color-warning-fg);
-    }
-    .actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-2);
-    }
-    .button-link {
-      padding: 0;
-      font-size: 0.875rem;
     }
   `,
 })

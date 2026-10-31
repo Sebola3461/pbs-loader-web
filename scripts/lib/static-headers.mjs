@@ -2,12 +2,11 @@ import { createHash } from 'node:crypto';
 
 export const COVER_ORIGIN = 'https://sebola3461.github.io';
 
-// Endereços que o botão "Fazer login com o Google" usa, como a documentação do Google Identity Services pede
-// para sites com CSP.
-export const GOOGLE_SIGN_IN = {
-  script: 'https://accounts.google.com/gsi/client',
-  style: 'https://accounts.google.com/gsi/style',
-  frame: 'https://accounts.google.com/gsi/',
+// Endereços que o widget Turnstile (anti-robô) usa, como a documentação do Cloudflare pede para sites com CSP.
+// A verificação do token acontece no servidor (Functions), então connect-src não precisa do domínio deles.
+export const TURNSTILE = {
+  script: 'https://challenges.cloudflare.com/turnstile/v0/api.js',
+  frame: 'https://challenges.cloudflare.com',
 };
 
 const SCRIPT_TAG = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
@@ -67,14 +66,14 @@ export function inlineScriptHashes(html) {
  * dos componentes em <style>; script-src só aceita os scripts do próprio site e os inline conhecidos pelo hash.
  */
 export function buildHeaders(scriptHashes) {
-  const scripts = ["'self'", ...[...new Set(scriptHashes)].sort(), GOOGLE_SIGN_IN.script].join(' ');
+  const scripts = ["'self'", ...[...new Set(scriptHashes)].sort(), TURNSTILE.script].join(' ');
   const csp = [
     "default-src 'self'",
     `script-src ${scripts}`,
-    `style-src 'self' 'unsafe-inline' ${GOOGLE_SIGN_IN.style}`,
+    "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: ${COVER_ORIGIN}`,
-    `frame-src ${GOOGLE_SIGN_IN.frame}`,
-    `connect-src 'self' ${GOOGLE_SIGN_IN.frame}`,
+    `frame-src ${TURNSTILE.frame}`,
+    "connect-src 'self'",
     "font-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",

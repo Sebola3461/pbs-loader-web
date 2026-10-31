@@ -27,7 +27,7 @@ type DialogKind = 'login' | 'username' | 'password';
         </button>
         <button
           type="button"
-          class="button button-secondary"
+          class="button-link"
           (click)="open('password')"
           title="Trocar senha"
         >

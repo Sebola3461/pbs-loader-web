@@ -198,7 +198,7 @@ describe('UsernameForm', () => {
     session.store.setUsername.mockRejectedValueOnce(conflict('username_taken'));
     const { el, done, submit } = render(session);
     await submit('Ana');
-    expect(el.querySelector('.error')?.textContent).toBe('Esse nome já está em uso.');
+    expect(el.querySelector('.form-error')?.textContent).toBe('Esse nome já está em uso.');
     expect(el.querySelector('#nome')?.getAttribute('aria-invalid')).toBe('true');
     expect(done).not.toHaveBeenCalled();
   });
@@ -241,7 +241,7 @@ describe('PasswordForm', () => {
     session.store.changePassword.mockRejectedValueOnce(conflict('wrong_password'));
     const { el, done, submit } = render(session);
     await submit('errada-total', 'nova-forte-99');
-    expect(el.querySelector('.error')?.textContent).toBe('A senha atual não confere.');
+    expect(el.querySelector('.form-error')?.textContent).toBe('A senha atual não confere.');
     expect(done).not.toHaveBeenCalled();
   });
 });
@@ -418,7 +418,7 @@ describe('Turnstile', () => {
     await session.fixture.whenStable();
     await new Promise((r) => setTimeout(r, 10));
     session.fixture.detectChanges();
-    expect(session.el.querySelector('.error')?.textContent).toContain('não carregou');
+    expect(session.el.querySelector('.form-error')?.textContent).toContain('não carregou');
   });
 
   it('erro no login reseta o desafio e pede um token novo', async () => {
@@ -434,7 +434,7 @@ describe('Turnstile', () => {
     session.el.querySelector('form')!.dispatchEvent(new Event('submit'));
     await settle();
     session.fixture.detectChanges();
-    expect(session.el.querySelector('.error')?.textContent).toContain('incorretos');
+    expect(session.el.querySelector('.form-error')?.textContent).toContain('incorretos');
     expect(fake.resets).toBe(1);
     expect(session.el.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(
       true,

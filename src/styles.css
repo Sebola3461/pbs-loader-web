@@ -106,6 +106,8 @@ legend {
 }
 
 input[type='search'],
+input[type='text'],
+input[type='password'],
 select {
   width: 100%;
   min-height: 2.75rem;
@@ -118,9 +120,41 @@ select {
 }
 
 input[type='search']:focus-visible,
+input[type='text']:focus-visible,
+input[type='password']:focus-visible,
 select:focus-visible {
   outline-offset: 0;
   border-color: var(--color-primary);
+}
+
+/* Formulários em dialog: um vocabulário só para título, dica, erro e rodapé de ações. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.form-hint {
+  margin-bottom: var(--space-2);
+  color: var(--color-muted-foreground);
+  font-size: 0.875rem;
+}
+
+.form-error {
+  min-height: 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--color-warning-fg);
+}
+
+.form-error:empty {
+  min-height: 0;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .button {

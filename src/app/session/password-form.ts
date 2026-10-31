@@ -12,7 +12,7 @@ import { SessionStore } from './session.store';
   template: `
     <form class="form" (submit)="submit($event)">
       <h2 id="senha-titulo">Trocar senha</h2>
-      <p class="hint">Ao trocar, as outras sessões são encerradas.</p>
+      <p class="form-hint">Ao trocar, as outras sessões são encerradas.</p>
       <label for="senha-atual">Senha atual</label>
       <input
         id="senha-atual"
@@ -35,8 +35,8 @@ import { SessionStore } from './session.store';
         [attr.aria-invalid]="error() ? 'true' : null"
         aria-describedby="senha-erro"
       />
-      <p id="senha-erro" class="error" role="alert">{{ error() ?? success() }}</p>
-      <div class="actions">
+      <p id="senha-erro" class="form-error" role="alert">{{ error() ?? success() }}</p>
+      <div class="form-actions">
         <button type="button" class="button button-secondary" (click)="done.emit()">
           Fechar
         </button>
@@ -46,44 +46,7 @@ import { SessionStore } from './session.store';
       </div>
     </form>
   `,
-  styles: `
-    .form {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-    }
-    h2 {
-      font-size: 1.125rem;
-    }
-    .hint {
-      color: var(--color-muted-foreground);
-      font-size: 0.875rem;
-      margin-bottom: var(--space-2);
-    }
-    input {
-      width: 100%;
-      min-height: 2.75rem;
-      padding: var(--space-2) var(--space-3);
-      font: inherit;
-      color: var(--color-foreground);
-      background: var(--color-background);
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius);
-    }
-    .error {
-      min-height: 1.25rem;
-      font-size: 0.8125rem;
-      color: var(--color-warning-fg);
-    }
-    .error:empty {
-      min-height: 0;
-    }
-    .actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--space-2);
-    }
-  `,
+  // Estilos vêm do design system global (styles.css): .form, .form-hint, .form-error, .form-actions.
 })
 export class PasswordForm {
   private readonly session = inject(SessionStore);

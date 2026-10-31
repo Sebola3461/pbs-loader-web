@@ -12,7 +12,7 @@ import { SessionStore } from './session.store';
   template: `
     <form class="form" (submit)="submit($event)">
       <h2 id="nome-titulo">Seu nome no site</h2>
-      <p class="hint">
+      <p class="form-hint">
         Esse nome aparece nos mods que você publicar e também é o seu login. Se trocar, o novo nome
         passa a valer para entrar.
       </p>
@@ -29,8 +29,8 @@ import { SessionStore } from './session.store';
         aria-describedby="nome-erro"
         [value]="current() ?? ''"
       />
-      <p id="nome-erro" class="error" role="alert">{{ error() }}</p>
-      <div class="actions">
+      <p id="nome-erro" class="form-error" role="alert">{{ error() }}</p>
+      <div class="form-actions">
         <button type="button" class="button button-secondary" (click)="done.emit()">Cancelar</button>
         <button type="submit" class="button" [disabled]="saving()">
           {{ saving() ? 'Salvando…' : 'Salvar' }}
@@ -38,41 +38,7 @@ import { SessionStore } from './session.store';
       </div>
     </form>
   `,
-  styles: `
-    .form {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-    }
-    h2 {
-      font-size: 1.125rem;
-    }
-    .hint {
-      color: var(--color-muted-foreground);
-      font-size: 0.875rem;
-      margin-bottom: var(--space-2);
-    }
-    input {
-      width: 100%;
-      min-height: 2.75rem;
-      padding: var(--space-2) var(--space-3);
-      font: inherit;
-      color: var(--color-foreground);
-      background: var(--color-background);
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius);
-    }
-    .error {
-      min-height: 1.25rem;
-      font-size: 0.8125rem;
-      color: var(--color-warning-fg);
-    }
-    .actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--space-2);
-    }
-  `,
+  // Estilos vêm do design system global (styles.css): .form, .form-hint, .form-error, .form-actions.
 })
 export class UsernameForm {
   private readonly session = inject(SessionStore);

@@ -101,16 +101,16 @@ test('buildHeaders monta a CSP com os hashes sem repetir', () => {
   assert.match(headers, /^\/\*\n/);
   assert.match(
     headers,
-    /script-src 'self' 'sha256-a' 'sha256-b' https:\/\/accounts\.google\.com\/gsi\/client;/,
+    /script-src 'self' 'sha256-a' 'sha256-b' https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js;/,
   );
   assert.match(headers, new RegExp(`img-src 'self' data: ${COVER_ORIGIN}`));
-  assert.match(headers, /frame-src https:\/\/accounts\.google\.com\/gsi\/;/);
-  assert.match(headers, /connect-src 'self' https:\/\/accounts\.google\.com\/gsi\/;/);
-  assert.match(
-    headers,
-    /style-src 'self' 'unsafe-inline' https:\/\/accounts\.google\.com\/gsi\/style;/,
-  );
+  assert.match(headers, /frame-src https:\/\/challenges\.cloudflare\.com;/);
+  assert.match(headers, /connect-src 'self';/);
+  assert.match(headers, /style-src 'self' 'unsafe-inline';/);
   assert.match(headers, /frame-ancestors 'none'/);
   assert.match(headers, /X-Content-Type-Options: nosniff/);
-  assert.match(buildHeaders([]), /script-src 'self' https:\/\/accounts\.google\.com\/gsi\/client;/);
+  assert.match(
+    buildHeaders([]),
+    /script-src 'self' https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js;/,
+  );
 });
