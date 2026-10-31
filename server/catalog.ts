@@ -4,6 +4,13 @@ export const DEFAULT_CATALOG_URL =
   'https://sebola3461.github.io/pbs-loader-catalogo/community-catalog.json';
 const TTL_MS = 5 * 60 * 1000;
 
+/** Espelha src/app/catalog/catalog.model.ts; a autoridade final é o JSON Schema do repo do catálogo. */
+export const MOD_TYPES = ['plugin', 'onibus', 'mapa', 'skin', 'destino', 'som', 'outro'] as const;
+export type ModType = (typeof MOD_TYPES)[number];
+
+/** Formato do id de mod: 2 a 64 de letras, números, "_" ou "-", começando por letra ou número. */
+export const MOD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/;
+
 export interface CatalogEntry {
   id: string;
   dono: { github?: string; site?: string };

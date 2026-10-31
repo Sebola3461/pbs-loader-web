@@ -55,6 +55,13 @@ export interface RouteResult {
   userId?: string;
 }
 
+/** Valor de um campo de um corpo JSON; corpo que não é objeto não tem campos. */
+export function field(body: unknown, name: string): unknown {
+  return body !== null && typeof body === 'object'
+    ? (body as Record<string, unknown>)[name]
+    : undefined;
+}
+
 /**
  * Envolve um handler: converte HttpError na resposta, esconde erro inesperado atrás de um 500 genérico e grava um
  * log JSON por requisição (rota, status, duração, usuário e o cf-ray para cruzar com o painel da Cloudflare).

@@ -100,7 +100,8 @@ auth_attempts    (kind CHECK(login-account|login-ip|register-ip), key, janela de
 ratings          (user_id FK, mod_id) PK, stars CHECK(1..5), created_at, updated_at
 rating_events    id, user_id FK, mod_id, operation CHECK(set|remove), stars (NULL só em remove, por CHECK), created_at
 mod_rating_stats mod_id PK, ratings_count CHECK(>=0), stars_sum CHECK(>=0)
-submissions      id, user_id FK, mod_id, operation CHECK(publish|edit|remove|hide), idempotency_key,
+submissions      id, user_id FK, mod_id, operation CHECK(publish|edit|remove|hide), payload (JSON do mod,
+                 presente só em publish/edit), idempotency_key,
                  status CHECK(pending|merged|rejected|failed), pr_number, error_code, created_at, updated_at,
                  UNIQUE(user_id, idempotency_key)
 reports          id, reporter_id FK, mod_id, reason CHECK(...), detail, status CHECK(open|resolved|dismissed),

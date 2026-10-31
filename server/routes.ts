@@ -1,6 +1,6 @@
-import { catalogMods, DEFAULT_CATALOG_URL } from './catalog';
+import { catalogMods, DEFAULT_CATALOG_URL, MOD_ID } from './catalog';
 import { Env } from './db';
-import { HttpError, json, noContent, readJson, requireSameOrigin, RouteResult } from './http';
+import { field, HttpError, json, noContent, readJson, requireSameOrigin, RouteResult } from './http';
 import { hashPassword, iterationsFromEnv, normalizePassword, verifyPassword } from './password';
 import { modStats, ratingStats, removeRating, setRating, userRatings } from './ratings';
 import {
@@ -10,6 +10,7 @@ import {
   deleteSession,
   requireUser,
 } from './sessions';
+import { recordSubmission } from './submissions';
 import {
   ipOf,
   LOGIN_LIMIT_PER_ACCOUNT,
@@ -35,14 +36,6 @@ export interface Deps {
 }
 
 export const defaultDeps: Deps = { now: () => new Date(), fetchImpl: (...args) => fetch(...args) };
-
-const MOD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/;
-
-function field(body: unknown, name: string): unknown {
-  return body !== null && typeof body === 'object'
-    ? (body as Record<string, unknown>)[name]
-    : undefined;
-}
 
 function modIdFrom(param: unknown): string {
   if (typeof param !== 'string' || !MOD_ID.test(param)) throw new HttpError(404, 'mod_not_found');
@@ -221,6 +214,19 @@ export async function deleteRating(
     response: json({ modId, stats: await modStats(env.DB, modId) }),
     userId: user.id,
   };
+}
+
+/** POST /api/submissions: valida o envio, confere a posse no catálogo publicado e grava pending. */
+export async function postSubmission(request: Request, env: Env, deps: Deps): Promise<RouteResult> {
+  requireSameOrigin(request);
+  const now = deps.now();
+  const user = await requireUser(env.DB, request, now);
+  const body = await readJson(request);
+  const mods = await catalogMods(env.CATALOG_URL ?? DEFAULT_CATALOG_URL, {
+    fetchImpl: deps.fetchImpl,
+    now: now.getTime(),
+  });
+  return recordSubmission(env.DB, user, body, mods, now);
 }
 
 /**
