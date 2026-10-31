@@ -19,8 +19,8 @@ navegação de leitura, o dourado (#E3B341) exclusivo para estrelas de avaliaç�
 
 A sensação é de instrumento funcional, não de arcade. Os cantos são mais angulosos que
 o padrão (0.375rem) para lembrar recortes de metal; as bordas de 1px marcam os limites
-dos "painéis" da cabine. O hero da home traz uma linha de detalhe âmbar (o "farol")
-que ancora a marca sem virar decoração gratuita.
+dos "painéis" da cabine. A home abre direto na busca — sem título nem subtítulo
+visíveis (decisão de design): o conteúdo é a ferramenta, não o letreiro.
 
 **Key Characteristics:**
 - Dark OLED #0B0D12 como base; superfícies #12151D e #191E28 em degraus
@@ -281,10 +281,9 @@ Grid de cards: `repeat(auto-fit, minmax(16rem, 1fr))` — sem media query para c
 
 ### Example Component Prompts
 
-**Hero da home:**
-"Sem título visível (decisão de design): intro curta em Chakra Petch 1rem #9AA3B2,
-max-width 60ch, direto acima da busca. h1 oculto preserva a hierarquia. Sem
-gradientes e sem linha decorativa."
+**Home:**
+"Sem título e sem subtítulo visíveis (decisão de design): a home abre direto na
+busca. h1 oculto preserva a hierarquia. Sem gradientes e sem linha decorativa."
 
 **Mod card:**
 "Card em #12151D, borda 1px #262C3A, radius 0.5rem, padding 1rem. Título Chakra Petch
