@@ -1,0 +1,61 @@
+{
+  "formato": 1,
+  "geradoEm": "2026-10-30T12:00:00.000Z",
+  "mods": [
+    {
+      "id": "PainelDigital",
+      "nome": "Painel Digital",
+      "tipo": "plugin",
+      "autor": "Fulana",
+      "dono": { "github": "fulana" },
+      "descricao": "Troca o painel do ônibus por um digital, com velocímetro grande e alerta de freio de estacionamento.\nFunciona em qualquer ônibus.",
+      "versoesDoJogo": ["307"],
+      "dependencias": ["PBSLoaderCommonUtils"],
+      "origem": "github",
+      "repo": "fulana/painel-digital",
+      "tag": "PainelDigital-v",
+      "arquivo": "PainelDigital.dll",
+      "pagina": "https://github.com/fulana/painel-digital",
+      "capa": null,
+      "confiavel": true,
+      "criadoEm": "2026-09-01T10:00:00Z",
+      "atualizadoEm": "2026-10-20T10:00:00Z"
+    },
+    {
+      "id": "LinhaCentro",
+      "nome": "Mapa Linha Centro",
+      "tipo": "mapa",
+      "autor": "Ciclano",
+      "dono": { "site": "01928c3e-7b2a-7c4d-8e9f-0123456789ab" },
+      "descricao": "Mapa de uma linha urbana com 18 paradas e terminal.",
+      "versoesDoJogo": ["306", "307"],
+      "dependencias": [],
+      "origem": "externa",
+      "url": "https://exemplo.com/linha-centro.zip",
+      "pagina": null,
+      "capa": null,
+      "confiavel": false,
+      "criadoEm": "2026-08-15T10:00:00Z",
+      "atualizadoEm": "2026-08-15T10:00:00Z"
+    },
+    {
+      "id": "SomDoMotor",
+      "nome": "Som do Motor Diesel",
+      "tipo": "plugin",
+      "autor": "Fulana",
+      "dono": { "github": "fulana" },
+      "descricao": "Som de motor diesel gerado em tempo real.",
+      "versoesDoJogo": ["307"],
+      "dependencias": ["PBSLoaderCommonUtils", "PainelDigital"],
+      "origem": "github",
+      "repo": "fulana/som-do-motor",
+      "tag": "SomDoMotor-v",
+      "arquivo": "SomDoMotor.dll",
+      "pagina": "https://github.com/fulana/som-do-motor",
+      "capa": null,
+      "confiavel": true,
+      "criadoEm": "2026-10-01T10:00:00Z",
+      "atualizadoEm": "2026-10-02T10:00:00Z"
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+<form class="filters" role="search" aria-label="Buscar mods" (submit)="$event.preventDefault()">
+  <div class="field field-search">
+    <label for="busca">Buscar</label>
+    <input
+      id="busca"
+      type="search"
+      placeholder="Nome, autor ou descrição"
+      autocomplete="off"
+      [maxLength]="maxQueryLength"
+      [value]="filters().query"
+      (input)="updateFrom('query', $event)"
+    />
+  </div>
+  <div class="field">
+    <label for="tipo">Tipo</label>
+    <select id="tipo" (change)="updateFrom('type', $event)">
+      <option value="" [selected]="filters().type === ''">Todos</option>
+      @for (type of types; track type.value) {
+        <option [value]="type.value" [selected]="filters().type === type.value">
+          {{ type.label }}
+        </option>
+      }
+    </select>
+  </div>
+  <div class="field">
+    <label for="autor">Autor</label>
+    <select id="autor" (change)="updateFrom('author', $event)">
+      <option value="" [selected]="filters().author === ''">Todos</option>
+      @for (author of store.authors; track author.slug) {
+        <option [value]="author.slug" [selected]="filters().author === author.slug">
+          {{ author.nome }}
+        </option>
+      }
+    </select>
+  </div>
+  <div class="field">
+    <label for="versao">Versão do jogo</label>
+    <select id="versao" (change)="updateFrom('gameVersion', $event)">
+      <option value="" [selected]="filters().gameVersion === ''">Todas</option>
+      @for (version of store.gameVersions; track version) {
+        <option [value]="version" [selected]="filters().gameVersion === version">
+          {{ version }}
+        </option>
+      }
+    </select>
+  </div>
+  <div class="field">
+    <label for="ordem">Ordenar por</label>
+    <select id="ordem" (change)="updateFrom('sort', $event)">
+      @for (sort of sorts; track sort.value) {
+        <option [value]="sort.value" [selected]="filters().sort === sort.value">
+          {{ sort.label }}
+        </option>
+      }
+    </select>
+  </div>
+</form>
+
+<div class="summary">
+  <p aria-live="polite" class="count">
+    {{ results().length }} {{ results().length === 1 ? 'mod' : 'mods' }}
+  </p>
+  @if (filtered()) {
+    <button type="button" class="button button-ghost" (click)="clear()">Limpar filtros</button>
+  }
+</div>
+
+@if (results().length > 0) {
+  <ul class="grid" aria-label="Mods">
+    @for (mod of results(); track mod.id) {
+      <li><app-mod-card [mod]="mod" /></li>
+    }
+  </ul>
+} @else if (store.mods.length === 0) {
+  <div class="empty">
+    <h2>Nenhum mod publicado ainda</h2>
+    <p>O catálogo da comunidade acabou de abrir. Seja a primeira pessoa a enviar um mod.</p>
+    <a class="button" [href]="links.submitMod" rel="noopener">Como enviar um mod</a>
+  </div>
+} @else {
+  <div class="empty">
+    <h2>Nenhum mod com esses filtros</h2>
+    <p>Tente outra palavra na busca ou tire algum filtro.</p>
+    <button type="button" class="button" (click)="clear()">Limpar filtros</button>
+  </div>
+}

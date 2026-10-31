@@ -1,0 +1,104 @@
+@if (view(); as view) {
+  <article class="detail">
+    <nav class="breadcrumb" aria-label="Você está em">
+      <a routerLink="/">Mods</a> <span aria-hidden="true">/</span>
+      <span aria-current="page">{{ view.mod.nome }}</span>
+    </nav>
+
+    <header class="header">
+      <div>
+        <h1>{{ view.mod.nome }}</h1>
+        <p class="author">
+          por <a [routerLink]="['/autores', view.authorSlug]">{{ view.mod.autor }}</a>
+        </p>
+        <ul class="tags" aria-label="Detalhes">
+          <li class="tag">{{ view.typeLabel }}</li>
+          @if (view.mod.confiavel) {
+            <li class="tag tag-trusted">Autor confiável</li>
+          }
+          @if (view.download.external) {
+            <li class="tag tag-external">Link externo</li>
+          }
+        </ul>
+      </div>
+      <div class="actions">
+        <a class="button" [href]="view.download.url" rel="noopener nofollow">{{
+          view.download.label
+        }}</a>
+        @if (view.mod.pagina; as pagina) {
+          <a class="button button-ghost" [href]="pagina" rel="noopener nofollow ugc"
+            >Página do mod</a
+          >
+        }
+      </div>
+    </header>
+
+    @if (view.coverUrl; as url) {
+      <img class="cover" [src]="url" [alt]="'Capa de ' + view.mod.nome" width="1280" height="720" />
+    }
+
+    <div class="columns">
+      <section class="description" aria-labelledby="sobre">
+        <h2 id="sobre">Sobre</h2>
+        <p class="text">{{ view.mod.descricao }}</p>
+
+        @if (view.installable) {
+          <div class="notice">
+            <h3>Instalar pelo PBS Loader</h3>
+            <p>
+              Abra o <a [href]="links.loader" rel="noopener">PBS Loader</a>, marque
+              <strong>{{ view.mod.nome }}</strong> na lista e clique em Aplicar. O instalador baixa
+              a versão mais nova e confere o arquivo.
+            </p>
+          </div>
+        }
+        @if (view.download.external) {
+          <div class="notice notice-warning">
+            <h3>Arquivo fora do GitHub</h3>
+            <p>
+              O download fica num site externo que o catálogo não verifica. Confira o arquivo antes
+              de abrir e só baixe se confiar no autor.
+            </p>
+          </div>
+        } @else if (!view.mod.confiavel) {
+          <p class="caution">
+            Mods da comunidade não passam por revisão. Um plugin roda com as mesmas permissões que
+            você no computador.
+          </p>
+        }
+      </section>
+
+      <aside class="facts" aria-label="Informações">
+        <dl>
+          <dt>Versões do jogo</dt>
+          <dd>{{ view.mod.versoesDoJogo.join(', ') }}</dd>
+          <dt>Precisa de</dt>
+          <dd>
+            @for (dep of view.dependencies; track dep.id; let last = $last) {
+              @if (dep.inCatalog) {
+                <a [routerLink]="['/mods', dep.id]">{{ dep.id }}</a>
+              } @else {
+                <span>{{ dep.id }}</span>
+              }
+              @if (!last) {
+                <span>, </span>
+              }
+            } @empty {
+              <span>Nada</span>
+            }
+          </dd>
+          <dt>Publicado em</dt>
+          <dd>{{ view.created }}</dd>
+          <dt>Atualizado em</dt>
+          <dd>{{ view.updated }}</dd>
+        </dl>
+        <a class="report" [href]="links.reportMod" rel="noopener">Denunciar este mod</a>
+      </aside>
+    </div>
+  </article>
+} @else {
+  <app-not-found
+    heading="Mod não encontrado"
+    message="Este mod não está no catálogo. Ele pode ter sido removido pelo autor ou por um moderador."
+  />
+}
