@@ -27,7 +27,14 @@ async function render(url: string, ...mods: CatalogMod[]) {
     select.value = value;
     select.dispatchEvent(new Event('change'));
   };
-  return { el, router, harness, names, settle, type, choose };
+  const typeRadio = (value: string) =>
+    el.querySelector<HTMLInputElement>(`input[name="tipo"][value="${value}"]`)!;
+  const pickType = (value: string) => {
+    const radio = typeRadio(value);
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
+  };
+  return { el, router, harness, names, settle, type, choose, typeRadio, pickType };
 }
 
 const mods = [
@@ -47,13 +54,14 @@ describe('ModBrowser', () => {
     const { el, names } = await render('/', ...mods);
     expect(names()).toEqual(['Som do Motor', 'Painel Digital', 'Mapa Linha Centro']);
     expect(el.querySelector('.count')?.textContent?.trim()).toBe('3 mods');
-    expect(el.querySelector('.summary button')).toBeNull();
+    expect(el.querySelector('.clear-filters')).toBeNull();
   });
 
   it('aplica os filtros que vêm na URL', async () => {
-    const { el, names } = await render('/?tipo=plugin&ordem=nome', ...mods);
+    const { el, names, typeRadio } = await render('/?tipo=plugin&ordem=nome', ...mods);
     expect(names()).toEqual(['Painel Digital', 'Som do Motor']);
-    expect(el.querySelector<HTMLSelectElement>('#tipo')?.value).toBe('plugin');
+    expect(typeRadio('plugin').checked).toBe(true);
+    expect(typeRadio('').checked).toBe(false);
     expect(el.querySelector<HTMLSelectElement>('#ordem')?.value).toBe('nome');
   });
 
@@ -84,12 +92,41 @@ describe('ModBrowser', () => {
     expect(router.url).toBe('/?q=diesel');
   });
 
-  it('dois selects trocados em seguida mantêm os dois filtros', async () => {
-    const { router, settle, choose } = await render('/', ...mods);
-    choose('#tipo', 'plugin');
+  it('dois filtros trocados em seguida mantêm os dois', async () => {
+    const { router, settle, choose, pickType } = await render('/', ...mods);
+    pickType('plugin');
     choose('#ordem', 'nome');
     await settle();
     expect(router.url).toBe('/?tipo=plugin&ordem=nome');
+  });
+
+  it('o tipo mostra só os tipos que existem, com a contagem de cada um', async () => {
+    const { el } = await render('/', ...mods);
+    const options = [...el.querySelectorAll('.option')].map((o) =>
+      [...o.querySelectorAll('span')].map((s) => s.textContent?.trim()).join(' '),
+    );
+    expect(options).toEqual(['Todos 3', 'Plugin 2', 'Mapa 1']);
+  });
+
+  it('no celular, o botão abre e fecha os filtros e mostra quantos estão ativos', async () => {
+    const { el, settle } = await render('/?tipo=mapa&versao=307', ...mods);
+    const toggle = el.querySelector<HTMLButtonElement>('.filters-toggle')!;
+    const panel = el.querySelector('#filtros')!;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.querySelector('.badge')?.textContent?.trim()).toBe('2');
+    expect(panel.classList.contains('open')).toBe(false);
+    toggle.click();
+    await settle();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(panel.classList.contains('open')).toBe(true);
+    toggle.click();
+    await settle();
+    expect(panel.classList.contains('open')).toBe(false);
+  });
+
+  it('sem filtro no painel o botão não mostra contagem', async () => {
+    const { el } = await render('/?q=painel', ...mods);
+    expect(el.querySelector('.filters-toggle .badge')).toBeNull();
   });
 
   it('trocar um select grava no histórico e mantém os outros filtros', async () => {
@@ -123,7 +160,7 @@ describe('ModBrowser', () => {
   it('sem resultado mostra o aviso e limpa os filtros mantendo a ordem', async () => {
     const { el, router, names, settle } = await render('/?q=inexistente&ordem=nome', ...mods);
     expect(names()).toEqual([]);
-    expect(el.querySelector('.empty h2')?.textContent).toBe('Nenhum mod com esses filtros');
+    expect(el.querySelector('.empty h3')?.textContent).toBe('Nenhum mod com esses filtros');
     el.querySelector<HTMLButtonElement>('.empty button')!.click();
     await settle();
     expect(router.url).toBe('/?ordem=nome');
@@ -133,7 +170,7 @@ describe('ModBrowser', () => {
   it('limpar os filtros grava no histórico, para o "voltar" trazê-los de volta', async () => {
     const { el, router, settle } = await render('/?tipo=mapa', ...mods);
     const navigate = vi.spyOn(router, 'navigate');
-    el.querySelector<HTMLButtonElement>('.summary button')!.click();
+    el.querySelector<HTMLButtonElement>('.clear-filters')!.click();
     await settle();
     expect(router.url).toBe('/');
     expect(navigate.mock.calls[0][1]?.replaceUrl).toBe(false);
@@ -141,7 +178,7 @@ describe('ModBrowser', () => {
 
   it('catálogo vazio convida a enviar o primeiro mod', async () => {
     const { el } = await render('/');
-    expect(el.querySelector('.empty h2')?.textContent).toBe('Nenhum mod publicado ainda');
+    expect(el.querySelector('.empty h3')?.textContent).toBe('Nenhum mod publicado ainda');
     expect(el.querySelector('.empty a')?.getAttribute('href')).toContain(
       'pbs-loader-catalogo#enviar-um-mod',
     );

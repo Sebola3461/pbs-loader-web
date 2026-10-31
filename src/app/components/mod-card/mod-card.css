@@ -4,42 +4,27 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  background: var(--color-card);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   transition:
     border-color 150ms ease,
-    transform 150ms ease;
+    box-shadow 150ms ease;
 }
 
 .card:hover,
 .card:focus-within {
-  border-color: var(--color-primary);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .card:hover {
-    transform: translateY(-2px);
-  }
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .cover {
-  aspect-ratio: 16 / 9;
-  background: var(--color-muted);
-  display: grid;
-  place-items: center;
-}
-
-.cover img {
   width: 100%;
-  height: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
-}
-
-.cover-placeholder {
-  font-weight: 700;
-  font-size: 1.125rem;
-  color: var(--color-muted-foreground);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .body {
@@ -50,9 +35,15 @@
   flex: 1;
 }
 
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
 .title {
-  font-size: 1.125rem;
-  line-height: 1.3;
+  font-size: 1.0625rem;
+  line-height: 1.35;
 }
 
 .title a {
@@ -60,7 +51,11 @@
   text-decoration: none;
 }
 
-/* O cartão inteiro é clicável pelo link do título; o link do autor fica por cima. */
+.card:hover .title a {
+  color: var(--color-link);
+}
+
+/* O cartão inteiro abre o mod pelo link do título; o link do autor fica por cima dele. */
 .stretched::after {
   content: '';
   position: absolute;
@@ -69,7 +64,7 @@
 
 .author {
   color: var(--color-muted-foreground);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
 }
 
 .author-link {
@@ -79,20 +74,18 @@
 
 .description {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  list-style: none;
-  margin-top: auto;
+  font-size: 0.9375rem;
 }
 
 .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: auto;
+  padding-top: var(--space-2);
   color: var(--color-muted-foreground);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }

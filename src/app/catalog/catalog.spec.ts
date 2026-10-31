@@ -200,6 +200,7 @@ describe('catalog', () => {
 
   it('formatDate em pt-BR e travessão sem data', () => {
     expect(formatDate('2026-10-20T10:00:00Z')).toBe('20 de outubro de 2026');
+    expect(formatDate('2026-10-20T10:00:00Z', 'short')).toBe('20 de out. de 2026');
     expect(formatDate(null)).toBe('—');
   });
 });

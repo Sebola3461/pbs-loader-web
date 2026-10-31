@@ -46,14 +46,14 @@ describe('ModDetail', () => {
     expect(el.querySelectorAll('.actions a')).toHaveLength(1);
     expect(text(el, '.notice-warning h3')).toBe('Arquivo fora do GitHub');
     expect(text(el, '.notice:not(.notice-warning)')).toBeUndefined();
-    expect(text(el, '.tag-external')).toBe('Link externo');
+    expect(text(el, '.badge-warning')).toBe('Link externo');
     expect(text(el, '.facts dd:nth-of-type(2)')).toBe('Nada');
   });
 
   it('autor confiável não mostra o aviso de revisão', () => {
     const { el } = render('PainelDigital', githubMod({ confiavel: true }));
     expect(el.querySelector('.caution')).toBeNull();
-    expect(text(el, '.tag-trusted')).toBe('Autor confiável');
+    expect(text(el, '.badge-success')).toBe('Autor confiável');
   });
 
   it('mod que não existe mostra a página de não encontrado', () => {

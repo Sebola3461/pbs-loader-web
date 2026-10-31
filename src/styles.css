@@ -1,24 +1,30 @@
 :root {
   color-scheme: light dark;
 
-  --color-background: #f4faf7;
-  --color-foreground: #0f2a22;
-  --color-card: #ffffff;
-  --color-muted: #e6f0ec;
-  --color-muted-foreground: #45584f;
-  --color-border: #c9ddd4;
-  --color-primary: #047857;
-  --color-primary-hover: #065f46;
+  /* Cinzas "slate" com azul como cor de ação: a paleta que a maioria dos catálogos usa. */
+  --color-background: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f1f5f9;
+  --color-foreground: #0f172a;
+  --color-muted-foreground: #475569;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
   --color-on-primary: #ffffff;
-  --color-link: #047857;
-  --color-warning: #b45309;
-  --color-trusted-bg: #d1fae5;
-  --color-trusted-fg: #065f46;
-  --color-external-bg: #fef3c7;
-  --color-external-fg: #92400e;
-  --color-ring: #047857;
+  --color-primary-soft: #eff6ff;
+  --color-link: #1d4ed8;
+  --color-success-bg: #dcfce7;
+  --color-success-fg: #166534;
+  --color-warning-bg: #fef3c7;
+  --color-warning-fg: #92400e;
+  --color-warning-border: #f59e0b;
+  --color-ring: #2563eb;
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06);
+  --shadow-card-hover: 0 4px 12px rgb(15 23 42 / 0.1);
 
   --radius: 0.5rem;
+  --radius-lg: 0.75rem;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -32,22 +38,26 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-background: #0b1411;
-    --color-foreground: #e3f1eb;
-    --color-card: #12201b;
-    --color-muted: #1b2d26;
-    --color-muted-foreground: #a3b8af;
-    --color-border: #2a4037;
-    --color-primary: #34d399;
-    --color-primary-hover: #6ee7b7;
-    --color-on-primary: #052e22;
-    --color-link: #6ee7b7;
-    --color-warning: #fbbf24;
-    --color-trusted-bg: #064e3b;
-    --color-trusted-fg: #d1fae5;
-    --color-external-bg: #451a03;
-    --color-external-fg: #fde68a;
-    --color-ring: #6ee7b7;
+    --color-background: #0f172a;
+    --color-surface: #1e293b;
+    --color-surface-muted: #273449;
+    --color-foreground: #f1f5f9;
+    --color-muted-foreground: #a8b5c7;
+    --color-border: #334155;
+    --color-border-strong: #475569;
+    --color-primary: #2563eb;
+    --color-primary-hover: #1d4ed8;
+    --color-on-primary: #ffffff;
+    --color-primary-soft: #172554;
+    --color-link: #93c5fd;
+    --color-success-bg: #14532d;
+    --color-success-fg: #dcfce7;
+    --color-warning-bg: #451a03;
+    --color-warning-fg: #fde68a;
+    --color-warning-border: #f59e0b;
+    --color-ring: #93c5fd;
+    --shadow-card: none;
+    --shadow-card-hover: 0 4px 12px rgb(0 0 0 / 0.4);
   }
 }
 
@@ -75,13 +85,14 @@ body {
 }
 
 h1 {
-  font-size: clamp(1.75rem, 1.2rem + 2vw, 2.5rem);
-  line-height: 1.15;
+  font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
+  line-height: 1.2;
   letter-spacing: -0.01em;
 }
 
 h2 {
-  line-height: 1.25;
+  font-size: 1.25rem;
+  line-height: 1.3;
 }
 
 a {
@@ -99,30 +110,48 @@ img {
 }
 
 .container {
-  width: min(72rem, 100% - 2rem);
+  width: min(76rem, 100% - 2rem);
   margin-inline: auto;
 }
 
-label {
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+label,
+legend {
   font-weight: 600;
   font-size: 0.875rem;
 }
 
-input,
+input[type='search'],
 select {
+  width: 100%;
   min-height: 2.75rem;
   padding: var(--space-2) var(--space-3);
   font: inherit;
   color: var(--color-foreground);
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius);
+}
+
+input[type='search']:focus-visible,
+select:focus-visible {
+  outline-offset: 0;
+  border-color: var(--color-primary);
 }
 
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: var(--space-2);
   min-height: 2.75rem;
   padding-inline: var(--space-4);
   font: inherit;
@@ -140,35 +169,49 @@ select {
   background: var(--color-primary-hover);
 }
 
-.button-ghost {
+.button-secondary {
+  color: var(--color-foreground);
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+}
+
+.button-secondary:hover {
+  background: var(--color-surface-muted);
+}
+
+.button-link {
+  min-height: 2.75rem;
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-weight: 600;
   color: var(--color-link);
-  background: transparent;
-  border-color: var(--color-border);
+  background: none;
+  border: 0;
+  cursor: pointer;
 }
 
-.button-ghost:hover {
-  background: var(--color-muted);
-}
-
-.tag {
+.badge {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
   padding: 0.125rem var(--space-2);
   font-size: 0.8125rem;
   font-weight: 600;
-  background: var(--color-muted);
+  line-height: 1.5;
   color: var(--color-muted-foreground);
+  background: var(--color-surface-muted);
   border-radius: 999px;
+  white-space: nowrap;
 }
 
-.tag-trusted {
-  background: var(--color-trusted-bg);
-  color: var(--color-trusted-fg);
+.badge-success {
+  color: var(--color-success-fg);
+  background: var(--color-success-bg);
 }
 
-.tag-external {
-  background: var(--color-external-bg);
-  color: var(--color-external-fg);
+.badge-warning {
+  color: var(--color-warning-fg);
+  background: var(--color-warning-bg);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -40,13 +40,19 @@ import { NotFound } from '../not-found/not-found';
       gap: var(--space-3);
       margin-block: var(--space-5);
     }
+    .breadcrumb {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      font-size: 0.875rem;
+    }
     .breadcrumb,
     .count {
       color: var(--color-muted-foreground);
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
       gap: var(--space-4);
       list-style: none;
       margin-top: var(--space-3);

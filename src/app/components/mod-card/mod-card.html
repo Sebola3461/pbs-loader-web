@@ -1,12 +1,25 @@
 <article class="card">
-  <div class="cover" aria-hidden="true">
-    @if (coverUrl(); as url) {
-      <img [src]="url" alt="" width="640" height="360" loading="lazy" decoding="async" />
-    } @else {
-      <span class="cover-placeholder">{{ typeLabel() }}</span>
-    }
-  </div>
+  @if (coverUrl(); as url) {
+    <img
+      class="cover"
+      [src]="url"
+      alt=""
+      width="640"
+      height="360"
+      loading="lazy"
+      decoding="async"
+    />
+  }
   <div class="body">
+    <div class="badges">
+      <span class="badge">{{ typeLabel() }}</span>
+      @if (mod().confiavel) {
+        <span class="badge badge-success">Autor confiável</span>
+      }
+      @if (mod().origem === 'externa') {
+        <span class="badge badge-warning">Link externo</span>
+      }
+    </div>
     <h3 class="title">
       <a [routerLink]="['/mods', mod().id]" class="stretched">{{ mod().nome }}</a>
     </h3>
@@ -14,15 +27,10 @@
       por <a [routerLink]="['/autores', authorSlug()]" class="author-link">{{ mod().autor }}</a>
     </p>
     <p class="description">{{ mod().descricao }}</p>
-    <ul class="tags" aria-label="Detalhes">
-      <li class="tag">{{ typeLabel() }}</li>
-      @if (mod().confiavel) {
-        <li class="tag tag-trusted">Autor confiável</li>
-      }
-      @if (mod().origem === 'externa') {
-        <li class="tag tag-external">Link externo</li>
-      }
-    </ul>
-    <p class="meta">Atualizado em {{ updated() }}</p>
+    <p class="meta">
+      <span>Jogo {{ versions() }}</span>
+      <span aria-hidden="true">·</span>
+      <span><span class="visually-hidden">Atualizado em </span>{{ updated() }}</span>
+    </p>
   </div>
 </article>

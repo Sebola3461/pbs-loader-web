@@ -19,10 +19,12 @@ describe('ModCard', () => {
     expect(title.textContent?.trim()).toBe('Painel Digital');
     expect(title.getAttribute('href')).toBe('/mods/PainelDigital');
     expect(el.querySelector('.author-link')?.getAttribute('href')).toBe('/autores/gh-fulana');
-    expect(el.querySelector('.cover-placeholder')?.textContent?.trim()).toBe('Plugin');
-    expect(el.querySelector('.tag-trusted')).not.toBeNull();
-    expect(el.querySelector('.tag-external')).toBeNull();
-    expect(el.querySelector('.meta')?.textContent).toContain('20 de outubro de 2026');
+    expect(el.querySelector('img')).toBeNull();
+    expect(el.querySelector('.badge')?.textContent?.trim()).toBe('Plugin');
+    expect(el.querySelector('.meta')?.textContent).toContain('Jogo 307');
+    expect(el.querySelector('.badge-success')).not.toBeNull();
+    expect(el.querySelector('.badge-warning')).toBeNull();
+    expect(el.querySelector('.meta')?.textContent).toContain('20 de out. de 2026');
   });
 
   it('usa a capa quando existe e marca link externo', () => {
@@ -31,7 +33,7 @@ describe('ModCard', () => {
       'https://sebola3461.github.io/pbs-loader-catalogo/covers/LinhaCentro.webp',
     );
     expect(el.querySelector('img')?.getAttribute('alt')).toBe('');
-    expect(el.querySelector('.tag-external')).not.toBeNull();
-    expect(el.querySelector('.tag-trusted')).toBeNull();
+    expect(el.querySelector('.badge-warning')).not.toBeNull();
+    expect(el.querySelector('.badge-success')).toBeNull();
   });
 });

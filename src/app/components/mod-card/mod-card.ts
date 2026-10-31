@@ -19,5 +19,6 @@ export class ModCard {
   protected readonly typeLabel = computed(() => MOD_TYPE_LABELS[this.mod().tipo]);
   protected readonly authorSlug = computed(() => authorSlug(this.mod().dono));
   protected readonly coverUrl = computed(() => this.store.coverUrl(this.mod()));
-  protected readonly updated = computed(() => formatDate(this.mod().atualizadoEm));
+  protected readonly updated = computed(() => formatDate(this.mod().atualizadoEm, 'short'));
+  protected readonly versions = computed(() => this.mod().versoesDoJogo.join(', '));
 }

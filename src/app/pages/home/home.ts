@@ -8,9 +8,9 @@ import { SITE_LINKS } from '../../site-links';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="hero">
-      <h1>Mods da comunidade do Proton Bus Simulator</h1>
+      <h1>Mods para o Proton Bus Simulator</h1>
       <p class="lead">
-        Encontre plugins, ônibus, mapas e skins feitos pela comunidade. Os plugins instalam pelo
+        Plugins, ônibus, mapas e skins feitos pela comunidade. Os plugins instalam pelo
         <a [href]="links.loader" rel="noopener">PBS Loader</a>.
       </p>
     </section>
@@ -21,10 +21,9 @@ import { SITE_LINKS } from '../../site-links';
       margin-block: var(--space-6) var(--space-5);
     }
     .lead {
-      margin-top: var(--space-2);
+      margin-top: var(--space-1);
       max-width: 60ch;
       color: var(--color-muted-foreground);
-      font-size: 1.0625rem;
     }
   `,
 })

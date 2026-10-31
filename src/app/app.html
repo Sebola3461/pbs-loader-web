@@ -2,7 +2,10 @@
 
 <header class="site-header">
   <div class="container header-inner">
-    <a routerLink="/" class="brand">PBS Loader <span class="brand-sub">Mods</span></a>
+    <a routerLink="/" class="brand">
+      <span class="brand-mark" aria-hidden="true">PBS</span>
+      <span>Mods do PBS Loader</span>
+    </a>
     <nav aria-label="Principal">
       <ul class="nav">
         <li>
@@ -14,22 +17,26 @@
             >Mods</a
           >
         </li>
-        <li><a [href]="links.submitMod" rel="noopener">Enviar mod</a></li>
         <li><a [href]="links.docs" rel="noopener">Documentação</a></li>
+        <li>
+          <a class="button" [href]="links.submitMod" rel="noopener">Enviar mod</a>
+        </li>
       </ul>
     </nav>
   </div>
 </header>
 
-<main id="conteudo" class="container" tabindex="-1">
-  <router-outlet />
+<main id="conteudo" tabindex="-1">
+  <div class="container">
+    <router-outlet />
+  </div>
 </main>
 
 <footer class="site-footer">
   <div class="container footer-inner">
     <p>Site da comunidade, sem ligação com os desenvolvedores do Proton Bus Simulator.</p>
-    <p>
-      <a [href]="links.submitMod" rel="noopener">Catálogo</a> ·
+    <p class="footer-links">
+      <a [href]="links.submitMod" rel="noopener">Catálogo</a>
       <a [href]="links.source" rel="noopener">Código do site</a>
     </p>
   </div>

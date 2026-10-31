@@ -39,7 +39,12 @@ export class ModBrowser {
   private readonly route = inject(ActivatedRoute);
   protected readonly store = inject(CatalogStore);
 
-  protected readonly types = MOD_TYPES.map((value) => ({ value, label: MOD_TYPE_LABELS[value] }));
+  // Só os tipos que existem no catálogo: uma opção que sempre dá zero resultado só atrapalha.
+  protected readonly types = MOD_TYPES.map((value) => ({
+    value,
+    label: MOD_TYPE_LABELS[value],
+    count: this.store.mods.filter((m) => m.tipo === value).length,
+  })).filter((type) => type.count > 0);
   protected readonly sorts = SORT_KEYS.map((value) => ({ value, label: SORT_LABELS[value] }));
   protected readonly links = SITE_LINKS;
   protected readonly maxQueryLength = MAX_QUERY_LENGTH;
@@ -52,6 +57,12 @@ export class ModBrowser {
     sortMods(filterMods(this.store.mods, this.filters()), this.filters().sort),
   );
   protected readonly filtered = computed(() => hasActiveFilters(this.filters()));
+  protected readonly panelFilterCount = computed(() => {
+    const { type, author, gameVersion } = this.filters();
+    return [type, author, gameVersion].filter(Boolean).length;
+  });
+  /** No celular, os filtros ficam fechados atrás de um botão; no desktop, sempre à mostra. */
+  protected readonly filtersOpen = signal(false);
 
   constructor() {
     // Voltar/avançar e links de fora (o "Mods" do menu) trazem filtros novos; as navegações daqui, não.
@@ -78,6 +89,10 @@ export class ModBrowser {
   protected updateFrom(field: keyof ModFilters, event: Event): void {
     const value = (event.target as HTMLInputElement | HTMLSelectElement).value;
     this.update({ [field]: value } as Partial<ModFilters>);
+  }
+
+  protected toggleFilters(): void {
+    this.filtersOpen.update((open) => !open);
   }
 
   protected clear(): void {

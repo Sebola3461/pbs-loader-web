@@ -32,8 +32,8 @@ describe('App', () => {
     expect(el.querySelector('.skip-link')?.getAttribute('href')).toBe('#conteudo');
     expect([...el.querySelectorAll('.nav a')].map((a) => a.textContent?.trim())).toEqual([
       'Mods',
-      'Enviar mod',
       'Documentação',
+      'Enviar mod',
     ]);
     expect(el.querySelector('main#conteudo router-outlet')).not.toBeNull();
     expect(el.querySelector('.site-footer')?.textContent).toContain(

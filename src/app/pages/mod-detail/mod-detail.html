@@ -11,22 +11,22 @@
         <p class="author">
           por <a [routerLink]="['/autores', view.authorSlug]">{{ view.mod.autor }}</a>
         </p>
-        <ul class="tags" aria-label="Detalhes">
-          <li class="tag">{{ view.typeLabel }}</li>
+        <div class="badges">
+          <span class="badge">{{ view.typeLabel }}</span>
           @if (view.mod.confiavel) {
-            <li class="tag tag-trusted">Autor confiável</li>
+            <span class="badge badge-success">Autor confiável</span>
           }
           @if (view.download.external) {
-            <li class="tag tag-external">Link externo</li>
+            <span class="badge badge-warning">Link externo</span>
           }
-        </ul>
+        </div>
       </div>
       <div class="actions">
         <a class="button" [href]="view.download.url" rel="noopener nofollow">{{
           view.download.label
         }}</a>
         @if (view.mod.pagina; as pagina) {
-          <a class="button button-ghost" [href]="pagina" rel="noopener nofollow ugc"
+          <a class="button button-secondary" [href]="pagina" rel="noopener nofollow ugc"
             >Página do mod</a
           >
         }

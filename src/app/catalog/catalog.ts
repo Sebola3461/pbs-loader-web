@@ -177,8 +177,12 @@ export function isInstallable(mod: CatalogMod): boolean {
   );
 }
 
-const DATE_FORMAT = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeZone: 'UTC' });
+const DATE_FORMATS = {
+  long: new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeZone: 'UTC' }),
+  short: new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'UTC' }),
+};
 
-export function formatDate(iso: string | null): string {
-  return iso ? DATE_FORMAT.format(new Date(iso)) : '—';
+/** long: "20 de outubro de 2026"; short (cartões): "20 de out. de 2026". */
+export function formatDate(iso: string | null, style: 'long' | 'short' = 'long'): string {
+  return iso ? DATE_FORMATS[style].format(new Date(iso)) : '—';
 }
