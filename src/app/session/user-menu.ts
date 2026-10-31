@@ -95,6 +95,7 @@ type DialogKind = 'login' | 'username' | 'password';
       border: 1px solid var(--color-border-strong);
       border-radius: var(--radius-xl);
       box-shadow: var(--shadow-modal);
+      overscroll-behavior: contain;
     }
     dialog::backdrop {
       background: rgb(0 0 0 / 0.6);
