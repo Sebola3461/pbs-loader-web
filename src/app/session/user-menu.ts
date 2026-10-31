@@ -12,7 +12,7 @@ import { PasswordForm } from './password-form';
 import { SessionStore } from './session.store';
 import { UsernameForm } from './username-form';
 
-type DialogKind = 'username' | 'password';
+type DialogKind = 'login' | 'username' | 'password';
 
 /** Área de conta no cabeçalho: formulário de login, ou nome, senha e "Sair". */
 @Component({
@@ -38,9 +38,15 @@ type DialogKind = 'username' | 'password';
       @if (error(); as message) {
         <p class="error" role="alert">{{ message }}</p>
       }
-    } @else if (session.siteKey(); as siteKey) {
-      <app-login-form [siteKey]="siteKey" />
+    } @else if (session.siteKey()) {
+      <!-- Formulário inteiro no meio do header quebrava o layout: ele abre em dialog, como os outros. -->
+      <button type="button" class="button" (click)="open('login')">Entrar</button>
     }
+    <dialog #loginDialog aria-label="Entrar ou criar conta" (close)="closed('login')">
+      @if (isOpen('login')) {
+        <app-login-form [siteKey]="session.siteKey()" />
+      }
+    </dialog>
     <dialog #renameDialog aria-labelledby="nome-titulo" (close)="closed('username')">
       @if (isOpen('username')) {
         <app-username-form (done)="close('username')" />
@@ -96,6 +102,7 @@ type DialogKind = 'username' | 'password';
 })
 export class UserMenu {
   protected readonly session = inject(SessionStore);
+  private readonly loginDialog = viewChild.required<ElementRef<HTMLDialogElement>>('loginDialog');
   private readonly renameDialog = viewChild.required<ElementRef<HTMLDialogElement>>('renameDialog');
   private readonly passwordDialog =
     viewChild.required<ElementRef<HTMLDialogElement>>('passwordDialog');
@@ -108,14 +115,23 @@ export class UserMenu {
 
   protected open(which: DialogKind): void {
     this.openDialog.set(which);
-    const dialog = which === 'username' ? this.renameDialog() : this.passwordDialog();
-    if (!dialog.nativeElement.open) dialog.nativeElement.showModal();
+    this.dialogOf(which).showModal();
   }
 
   /** Chamado pelo botão dentro do diálogo e pelo próprio <dialog> (Esc). */
   protected close(which: DialogKind): void {
-    const dialog = which === 'username' ? this.renameDialog() : this.passwordDialog();
-    if (dialog.nativeElement.open) dialog.nativeElement.close();
+    const dialog = this.dialogOf(which);
+    if (dialog.open) dialog.close();
+  }
+
+  private dialogOf(which: DialogKind): HTMLDialogElement {
+    const dialog =
+      which === 'login'
+        ? this.loginDialog()
+        : which === 'username'
+          ? this.renameDialog()
+          : this.passwordDialog();
+    return dialog.nativeElement;
   }
 
   protected closed(which: DialogKind): void {

@@ -260,9 +260,13 @@ describe('UserMenu', () => {
     expect(el.querySelector('.user')).toBeNull();
   });
 
-  it('deslogado com chave do Turnstile mostra o formulário', () => {
-    const { el } = render(fakeSession({ siteKey: 'cid' }));
+  it('deslogado com chave do Turnstile mostra o botão Entrar, que abre o formulário no diálogo', () => {
+    const { el, fixture } = render(fakeSession({ siteKey: 'cid' }));
+    expect(el.querySelector('app-login-form')).toBeNull();
+    buttonByText(el, 'Entrar').click();
+    fixture.detectChanges();
     expect(el.querySelector('app-login-form')).not.toBeNull();
+    expect(el.querySelector('dialog')!.open).toBe(true);
   });
 
   it('logado mostra o nome e sai', async () => {
@@ -290,7 +294,7 @@ describe('UserMenu', () => {
     const { el, fixture } = render(session);
     el.querySelector<HTMLButtonElement>('.username')!.click();
     fixture.detectChanges();
-    const dialog = el.querySelector('dialog')!;
+    const dialog = el.querySelector('dialog[aria-labelledby="nome-titulo"]') as HTMLDialogElement;
     expect(dialog.open).toBe(true);
     el.querySelector<HTMLInputElement>('#nome')!.value = 'Ana Silva';
     el.querySelector('form')!.dispatchEvent(new Event('submit'));
