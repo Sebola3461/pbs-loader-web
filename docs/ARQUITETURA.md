@@ -22,7 +22,7 @@ Não funcionais:
 ## Visão geral
 
 ```
-                      Google (login)
+            Turnstile (antibot) + login próprio
                            |
  navegador --- Angular estático (Cloudflare Pages)
      |                     |
@@ -61,12 +61,13 @@ Um arquivo por mod porque os PRs automáticos chegam ao mesmo tempo. Num arquivo
 
 ### Login
 
-1. Botão do Google Identity Services devolve um ID token.
-2. `POST /api/session` confere assinatura (JWKS do Google), `aud`, `iss`, `exp` e `email_verified`.
-3. Cria ou encontra o usuário pelo `sub`. No primeiro acesso ele escolhe um apelido. O nome do perfil Google é o nome real e não é publicado.
-4. Cookie de sessão assinado (HMAC), `HttpOnly`, `Secure`, `SameSite=Lax`, 30 dias. Em cada escrita a Function confere `Origin` e o estado do usuário no D1, então banir vale na hora.
+1. Cadastro (`POST /api/auth/register`) cria a conta com username + senha; o username é o nome público e o login, ao mesmo tempo. Senha de 8 a 128 caracteres, hash PBKDF2-SHA256 (KDF nativo do WebCrypto, 600 mil iterações por padrão, formato auto-descritivo que permite subir as iterações no futuro).
+2. Entrada (`POST /api/auth/login`) confere usuário + senha com comparação em tempo constante; conta inexistente e senha errada devolvem exatamente o mesmo erro, e conta inexistente ainda passa por um hash fictício para não denunciar pelo tempo.
+3. Cadastro e login exigem token do Turnstile (anti-robô do próprio Cloudflare, grátis). Força bruta é travada por janela de uma hora, separada por conta (10/h) e por IP (30/h); cadastro, 5/h por IP.
+4. Cookie de sessão `HttpOnly`, `Secure`, `__Host-`, `SameSite=Lax`, 30 dias sem uso / 90 no total (a sessão fica no D1, com o token hasheado). Em cada escrita a Function confere `Origin` e o estado do usuário no D1, então banir vale na hora.
+5. Trocar senha revoga todas as sessões e re-emite o cookie atual. Sem e-mail no sistema: quem perder a senha perde a conta, e o atendimento é manual pelo admin.
 
-Só guardamos `sub` e apelido. E-mail não é armazenado.
+Não pedimos e-mail nem nome real. O site não depende de terceiro para autenticar.
 
 ### Envio de mod
 
@@ -92,9 +93,10 @@ No cliente, sobre o catálogo agregado (gerado no build) mais `/api/stats` (nota
 D1 é SQLite: sem `timestamptz` nem enum, então datas ficam em texto ISO-8601 UTC conferido por CHECK, e conjuntos fixos também por CHECK. IDs públicos em UUIDv7.
 
 ```
-users            id (uuidv7 PK), google_sub UNIQUE, nickname UNIQUE, role CHECK(user|moderator|admin),
-                 status CHECK(active|banned), created_at, updated_at
-user_events      id, user_id FK, actor_id FK, operation CHECK(create|rename|ban|unban|role), detail, created_at
+users            id (uuidv7 PK), username, username_key UNIQUE (lower), password_hash (PBKDF2),
+                 role CHECK(user|moderator|admin), status CHECK(active|banned), created_at, updated_at
+user_events      id, user_id FK, actor_id FK, operation CHECK(create|rename|ban|unban|role|password_change), detail, created_at
+auth_attempts    (kind CHECK(login-account|login-ip|register-ip), key, janela de 1h) PK, attempts CHECK(>0)
 ratings          (user_id FK, mod_id) PK, stars CHECK(1..5), created_at, updated_at
 rating_events    id, user_id FK, mod_id, operation CHECK(set|remove), stars (NULL só em remove, por CHECK), created_at
 mod_rating_stats mod_id PK, ratings_count CHECK(>=0), stars_sum CHECK(>=0)
@@ -119,7 +121,7 @@ Rastreabilidade: mudança em mod tem autor, data e operação no commit (`via si
 | PR aberto para o mesmo mod | 409; o usuário espera o merge |
 | Limite de envios | 429 |
 | GitHub fora ou com limite de API | `submissions.status = failed` com `error_code`; o usuário reenvia com a mesma chave |
-| JWKS do Google inacessível | 503 |
+| Turnstile inacessível | 503, falha fechada: sem antibot não entra cadastro nem login |
 | Erro no D1 | 500 genérico; o detalhe vai só para o log |
 
 ## Autorização
@@ -133,7 +135,7 @@ Rastreabilidade: mudança em mod tem autor, data e operação no commit (`via si
 | Ocultar mod, resolver denúncia, banir | moderador |
 | Mudar papel | admin |
 
-Spam: o Google não informa a idade da conta, então o controle fica em limite por usuário, banimento e na validação da Action.
+Spam: Turnstile no cadastro e no login, limite por IP e por conta, banimento e a validação da Action.
 
 ## Confiança no instalador
 

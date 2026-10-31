@@ -17,8 +17,13 @@ export interface Database {
 
 export interface Env {
   DB: Database;
-  GOOGLE_CLIENT_ID: string;
   CATALOG_URL?: string;
+  /** Chave pública do widget Turnstile (vai para o navegador). Em dev, a chave de teste sempre passa. */
+  TURNSTILE_SITE_KEY?: string;
+  /** Chave secreta do Turnstile; sem ela o cadastro e o login falham fechados (503). */
+  TURNSTILE_SECRET_KEY?: string;
+  /** Itens de PBKDF2 opcional; para calibrar contra o limite de CPU do plano. */
+  PBKDF2_ITERATIONS?: string;
 }
 
 export function isUniqueViolation(error: unknown, column: string): boolean {

@@ -8,9 +8,9 @@ import {
   setRating,
   userRatings,
 } from './ratings';
-import { fakeFetch } from './testing/google-tokens';
+import { fakeFetch } from './testing/http';
 import { createTestDatabase } from './testing/sqlite-d1';
-import { findOrCreateUser, User } from './users';
+import { registerUser, User } from './users';
 
 const NOW = new Date('2026-10-30T12:00:00.000Z');
 const later = (ms: number) => new Date(NOW.getTime() + ms);
@@ -24,10 +24,14 @@ async function expectHttpError(promise: Promise<unknown>, status: number, code: 
   expect(error).toMatchObject({ status, code });
 }
 
+/** Hash falsa com comprimento válido para o CHECK do banco; nunca é verificada nestes testes. */
+const FAKE_HASH =
+  'pbkdf2$sha256$10000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+
 async function setup() {
   const db = createTestDatabase();
-  const ana = await findOrCreateUser(db, 'sub-ana', NOW);
-  const bia = await findOrCreateUser(db, 'sub-bia', NOW);
+  const ana = (await registerUser(db, 'Ana', 'ana', FAKE_HASH, NOW)) as User;
+  const bia = (await registerUser(db, 'Bia', 'bia', FAKE_HASH, NOW)) as User;
   const mods = new Map<string, CatalogEntry>([
     ['Painel', { id: 'Painel', dono: { github: 'fulana' } }],
     ['Mapa', { id: 'Mapa', dono: { site: bia.id } }],
@@ -91,7 +95,7 @@ describe('avaliações', () => {
     ).toThrow(/FOREIGN KEY constraint failed/);
     expect(
       insert(
-        "INSERT INTO users (id, google_sub, created_at, updated_at) VALUES ('curto', 's', 'x', 'x')",
+        "INSERT INTO users (id, username, username_key, password_hash, created_at, updated_at) VALUES ('curto', 'ab', 'ab', 'x', 'x', 'x')",
       ),
     ).toThrow(/CHECK constraint failed/);
   });
@@ -125,7 +129,7 @@ describe('avaliações', () => {
 
   it('estatísticas com contagem e média arredondada', async () => {
     const { db, ana, bia, mods } = await setup();
-    const caio = (await findOrCreateUser(db, 'sub-caio', NOW)) as User;
+    const caio = (await registerUser(db, 'Caio', 'caio', FAKE_HASH, NOW)) as User;
     await setRating(db, ana, 'Painel', 5, mods, NOW);
     await setRating(db, bia, 'Painel', 4, mods, NOW);
     await setRating(db, caio, 'Painel', 4, mods, NOW);

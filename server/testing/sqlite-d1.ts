@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync, SQLInputValue } from 'node:sqlite';
 import { Database, Statement } from '../db';
 
@@ -37,8 +37,11 @@ class SqliteStatement implements Statement {
 export function createTestDatabase(): Database & { raw: DatabaseSync } {
   const raw = new DatabaseSync(':memory:');
   raw.exec('PRAGMA foreign_keys = ON;');
-  const migration = new URL('../../migrations/0001_users_sessions_ratings.sql', import.meta.url);
-  raw.exec(readFileSync(migration, 'utf8'));
+  // Aplica as migrações na ordem dos nomes, igual ao D1: banco de teste nunca diverge do de verdade.
+  const migrations = new URL('../../migrations/', import.meta.url);
+  for (const file of readdirSync(migrations).sort()) {
+    if (file.endsWith('.sql')) raw.exec(readFileSync(new URL(file, migrations), 'utf8'));
+  }
   return {
     raw,
     prepare: (sql) => new SqliteStatement(raw, sql),

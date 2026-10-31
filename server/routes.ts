@@ -1,7 +1,7 @@
 import { catalogMods, DEFAULT_CATALOG_URL } from './catalog';
 import { Env } from './db';
-import { verifyGoogleIdToken } from './google';
 import { HttpError, json, noContent, readJson, requireSameOrigin, RouteResult } from './http';
+import { hashPassword, iterationsFromEnv, normalizePassword, verifyPassword } from './password';
 import { modStats, ratingStats, removeRating, setRating, userRatings } from './ratings';
 import {
   clearSessionCookie,
@@ -10,9 +10,25 @@ import {
   deleteSession,
   requireUser,
 } from './sessions';
-import { findOrCreateUser, publicUser, setNickname } from './users';
+import {
+  ipOf,
+  LOGIN_LIMIT_PER_ACCOUNT,
+  LOGIN_LIMIT_PER_IP,
+  recordAttempt,
+  REGISTER_LIMIT_PER_IP,
+  throttleBudget,
+} from './throttle';
+import { verifyTurnstile } from './turnstile';
+import {
+  findUserByUsernameKey,
+  normalizeUsername,
+  publicUser,
+  registerUser,
+  renameUsername,
+  User,
+} from './users';
 
-/** O que varia entre produção e teste: o relógio e o fetch para o Google e o catálogo. */
+/** O que varia entre produção e teste: o relógio e o fetch para o Turnstile e o catálogo. */
 export interface Deps {
   now: () => Date;
   fetchImpl: typeof fetch;
@@ -33,32 +49,76 @@ function modIdFrom(param: unknown): string {
   return param;
 }
 
-/** GET /api/me: usuário logado (ou null) e o client ID do Google que o botão de login usa. */
+/** GET /api/me: usuário logado (ou null) e a chave pública do Turnstile que o formulário usa. */
 export async function getMe(request: Request, env: Env, deps: Deps): Promise<RouteResult> {
   const user = await currentUser(env.DB, request, deps.now());
   const active = user?.status === 'active' ? user : null;
   return {
     response: json({
       user: active ? publicUser(active) : null,
-      googleClientId: env.GOOGLE_CLIENT_ID,
+      turnstileSiteKey: env.TURNSTILE_SITE_KEY ?? '',
     }),
     userId: active?.id,
   };
 }
 
-/** POST /api/session: troca o ID token do Google por uma sessão. */
-export async function postSession(request: Request, env: Env, deps: Deps): Promise<RouteResult> {
+/** POST /api/auth/register: cria a conta com username + senha e já entra com uma sessão. */
+export async function postRegister(request: Request, env: Env, deps: Deps): Promise<RouteResult> {
   requireSameOrigin(request);
-  const credential = field(await readJson(request), 'credential');
-  if (typeof credential !== 'string' || credential.length > 4096)
-    throw new HttpError(400, 'invalid_token');
+  const body = await readJson(request);
   const now = deps.now();
-  const { sub } = await verifyGoogleIdToken(credential, {
-    clientId: env.GOOGLE_CLIENT_ID,
-    now,
-    fetchImpl: deps.fetchImpl,
-  });
-  const user = await findOrCreateUser(env.DB, sub, now);
+  const ip = ipOf(request);
+  // Cadastro conta a cota sempre: conta boa ou ruim, o que trava é o volume de spam.
+  await throttleBudget(env.DB, 'register-ip', ip, REGISTER_LIMIT_PER_IP, now);
+  await verifyTurnstile(field(body, 'turnstileToken'), ip, env.TURNSTILE_SECRET_KEY, deps.fetchImpl);
+  const { username, key } = normalizeUsername(field(body, 'username'));
+  const password = normalizePassword(field(body, 'password'));
+  const hash = await hashPassword(password, iterationsFromEnv(env.PBKDF2_ITERATIONS));
+  await recordAttempt(env.DB, 'register-ip', ip, now);
+  const user = await registerUser(env.DB, username, key, hash, now);
+  const cookie = await createSession(env.DB, user.id, now);
+  return {
+    response: json({ user: publicUser(user) }, { status: 201, headers: { 'Set-Cookie': cookie } }),
+    userId: user.id,
+  };
+}
+
+function loginKey(raw: unknown): string {
+  // No login não se valida formato: qualquer coisa vira chave de busca, e a resposta é sempre a mesma.
+  return typeof raw === 'string' ? raw.normalize('NFKC').trim().toLowerCase() : '';
+}
+
+function passwordCandidate(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  try {
+    return normalizePassword(raw);
+  } catch {
+    // Senha fora do padrão é só senha errada: resposta única, sem dica do que falhou.
+    return null;
+  }
+}
+
+/** POST /api/auth/login: usuário + senha + Turnstile. Conta inexistente e senha errada dão o mesmo erro. */
+export async function postLogin(request: Request, env: Env, deps: Deps): Promise<RouteResult> {
+  requireSameOrigin(request);
+  const body = await readJson(request);
+  const now = deps.now();
+  const ip = ipOf(request);
+  const usernameKey = loginKey(field(body, 'username'));
+  const candidate = passwordCandidate(field(body, 'password'));
+  await throttleBudget(env.DB, 'login-account', usernameKey, LOGIN_LIMIT_PER_ACCOUNT, now);
+  await throttleBudget(env.DB, 'login-ip', ip, LOGIN_LIMIT_PER_IP, now);
+  await verifyTurnstile(field(body, 'turnstileToken'), ip, env.TURNSTILE_SECRET_KEY, deps.fetchImpl);
+  const user = usernameKey ? await findUserByUsernameKey(env.DB, usernameKey) : null;
+  const verified =
+    user !== null &&
+    candidate !== null &&
+    (await verifyPassword(candidate, user.passwordHash));
+  if (!verified || user === null) {
+    await recordAttempt(env.DB, 'login-account', usernameKey || 'vazio', now);
+    await recordAttempt(env.DB, 'login-ip', ip, now);
+    throw new HttpError(401, 'invalid_credentials');
+  }
   if (user.status !== 'active') throw new HttpError(403, 'banned');
   const cookie = await createSession(env.DB, user.id, now);
   return {
@@ -74,13 +134,46 @@ export async function deleteSessionRoute(request: Request, env: Env): Promise<Ro
   return { response: noContent({ 'Set-Cookie': clearSessionCookie() }) };
 }
 
-/** PUT /api/me/nickname */
-export async function putNickname(request: Request, env: Env, deps: Deps): Promise<RouteResult> {
+/** PUT /api/me/username: o username é login e nome público; a troca fica no histórico. */
+export async function putUsername(request: Request, env: Env, deps: Deps): Promise<RouteResult> {
   requireSameOrigin(request);
   const now = deps.now();
   const user = await requireUser(env.DB, request, now);
-  const updated = await setNickname(env.DB, user, field(await readJson(request), 'nickname'), now);
+  const updated = await renameUsername(env.DB, user, field(await readJson(request), 'username'), now);
   return { response: json({ user: publicUser(updated) }), userId: user.id };
+}
+
+/** PUT /api/me/password: troca de senha revoga todas as sessões e re-emite a do navegador atual. */
+export async function putPassword(request: Request, env: Env, deps: Deps): Promise<RouteResult> {
+  requireSameOrigin(request);
+  const now = deps.now();
+  const user: User = await requireUser(env.DB, request, now);
+  const body = await readJson(request);
+  const current = passwordCandidate(field(body, 'currentPassword'));
+  const stored = await findUserByUsernameKey(env.DB, loginKey(user.username));
+  const currentOk =
+    current !== null && stored !== null && (await verifyPassword(current, stored.passwordHash));
+  if (!currentOk) throw new HttpError(400, 'wrong_password');
+  const next = normalizePassword(field(body, 'newPassword'));
+  const hash = await hashPassword(next, iterationsFromEnv(env.PBKDF2_ITERATIONS));
+  // A sessão nova só nasce DEPOIS de apagar as velhas, senão o próprio DELETE a mataria.
+  await env.DB.batch([
+    env.DB
+      .prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?')
+      .bind(hash, now.toISOString(), user.id),
+    env.DB
+      .prepare(
+        "INSERT INTO user_events (user_id, actor_id, operation, created_at) VALUES (?, ?, 'password_change', ?)",
+      )
+      .bind(user.id, user.id, now.toISOString()),
+    // Quem copiou o cookie antigo fica fora: a sessão atual é recriada com um token novo.
+    env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
+  ]);
+  const cookie = await createSession(env.DB, user.id, now);
+  return {
+    response: json({ user: publicUser(user) }, { headers: { 'Set-Cookie': cookie } }),
+    userId: user.id,
+  };
 }
 
 /** GET /api/me/ratings: as notas do usuário logado, por mod. */

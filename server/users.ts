@@ -7,48 +7,50 @@ export type UserStatus = 'active' | 'banned';
 
 export interface User {
   id: string;
-  nickname: string | null;
+  username: string;
   role: Role;
   status: UserStatus;
 }
 
-/** O que o site mostra do usuário logado. O "sub" do Google nunca sai do servidor. */
+/** O que o site mostra do usuário logado. A hash da senha nunca sai do servidor. */
 export function publicUser(user: User) {
-  return { id: user.id, nickname: user.nickname, role: user.role };
+  return { id: user.id, username: user.username, role: user.role };
 }
 
-const NICKNAME = /^[\p{L}\p{N}](?:[\p{L}\p{N}_.\- ]{1,22})[\p{L}\p{N}]$/u;
+const USERNAME = /^[\p{L}\p{N}](?:[\p{L}\p{N}_.\- ]{1,22})[\p{L}\p{N}]$/u;
 
 /**
- * Apelido público, já que o nome do perfil do Google é o nome real da pessoa: de 3 a 24 letras, números, espaço,
- * "_", "." ou "-", começando e terminando com letra ou número e sem espaço repetido.
+ * O username é login e nome público ao mesmo tempo: de 3 a 24 letras, números, espaço, "_", "." ou "-",
+ * começando e terminando com letra ou número e sem espaço repetido.
  */
-export function normalizeNickname(raw: unknown): { nickname: string; key: string } {
-  if (typeof raw !== 'string') throw new HttpError(400, 'invalid_nickname');
-  const nickname = raw.normalize('NFKC').trim();
-  if (!NICKNAME.test(nickname) || nickname.includes('  ')) {
-    throw new HttpError(400, 'invalid_nickname');
+export function normalizeUsername(raw: unknown): { username: string; key: string } {
+  if (typeof raw !== 'string') throw new HttpError(400, 'invalid_username');
+  const username = raw.normalize('NFKC').trim();
+  if (!USERNAME.test(username) || username.includes('  ')) {
+    throw new HttpError(400, 'invalid_username');
   }
-  return { nickname, key: nickname.toLowerCase() };
+  return { username, key: username.toLowerCase() };
 }
 
-const SELECT_USER = 'SELECT id, nickname, role, status FROM users';
+const SELECT_USER_WITH_HASH = 'SELECT id, username, role, status, password_hash FROM users';
 
-/** Primeiro login cria o usuário (sem apelido) e registra a criação no histórico, na mesma transação. */
-export async function findOrCreateUser(db: Database, googleSub: string, now: Date): Promise<User> {
-  const existing = await db
-    .prepare(`${SELECT_USER} WHERE google_sub = ?`)
-    .bind(googleSub)
-    .first<User>();
-  if (existing) return existing;
-
+/** Cadastro cria o usuário com a hash da senha e registra a criação no histórico, na mesma transação. */
+export async function registerUser(
+  db: Database,
+  username: string,
+  usernameKey: string,
+  passwordHash: string,
+  now: Date,
+): Promise<User> {
   const id = uuidv7(now);
   const at = now.toISOString();
   try {
     await db.batch([
       db
-        .prepare('INSERT INTO users (id, google_sub, created_at, updated_at) VALUES (?, ?, ?, ?)')
-        .bind(id, googleSub, at, at),
+        .prepare(
+          'INSERT INTO users (id, username, username_key, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .bind(id, username, usernameKey, passwordHash, at, at),
       db
         .prepare(
           "INSERT INTO user_events (user_id, actor_id, operation, created_at) VALUES (?, ?, 'create', ?)",
@@ -56,40 +58,56 @@ export async function findOrCreateUser(db: Database, googleSub: string, now: Dat
         .bind(id, id, at),
     ]);
   } catch (error) {
-    // Dois logins simultâneos da mesma conta: o outro criou primeiro.
-    if (!isUniqueViolation(error, 'users.google_sub')) throw error;
+    // Cadastro simultâneo com o mesmo nome: o outro ganhou.
+    if (isUniqueViolation(error, 'users.username_key')) throw new HttpError(409, 'username_taken');
+    throw error;
   }
-  const created = await db
-    .prepare(`${SELECT_USER} WHERE google_sub = ?`)
-    .bind(googleSub)
-    .first<User>();
-  if (!created) throw new Error('usuário sumiu logo depois de criado');
-  return created;
+  return { id, username, role: 'user', status: 'active' };
 }
 
-export async function setNickname(
+export async function findUserByUsernameKey(
+  db: Database,
+  usernameKey: string,
+): Promise<(User & { passwordHash: string }) | null> {
+  const row = await db
+    .prepare(`${SELECT_USER_WITH_HASH} WHERE username_key = ?`)
+    .bind(usernameKey)
+    .first<{ id: string; username: string; role: Role; status: UserStatus; password_hash: string }>();
+  if (!row)
+    return null;
+  return {
+    id: row.id,
+    username: row.username,
+    role: row.role,
+    status: row.status,
+    passwordHash: row.password_hash,
+  };
+}
+
+/** Troca do username: continua sendo um evento com antes/depois, e conflito com outro nome dá 409. */
+export async function renameUsername(
   db: Database,
   user: User,
   raw: unknown,
   now: Date,
 ): Promise<User> {
-  const { nickname, key } = normalizeNickname(raw);
-  if (nickname === user.nickname) return user;
+  const { username, key } = normalizeUsername(raw);
+  if (username === user.username) return user;
   const at = now.toISOString();
   try {
     await db.batch([
       db
-        .prepare('UPDATE users SET nickname = ?, nickname_key = ?, updated_at = ? WHERE id = ?')
-        .bind(nickname, key, at, user.id),
+        .prepare('UPDATE users SET username = ?, username_key = ?, updated_at = ? WHERE id = ?')
+        .bind(username, key, at, user.id),
       db
         .prepare(
           "INSERT INTO user_events (user_id, actor_id, operation, detail, created_at) VALUES (?, ?, 'rename', ?, ?)",
         )
-        .bind(user.id, user.id, JSON.stringify({ from: user.nickname, to: nickname }), at),
+        .bind(user.id, user.id, JSON.stringify({ from: user.username, to: username }), at),
     ]);
   } catch (error) {
-    if (isUniqueViolation(error, 'users.nickname_key')) throw new HttpError(409, 'nickname_taken');
+    if (isUniqueViolation(error, 'users.username_key')) throw new HttpError(409, 'username_taken');
     throw error;
   }
-  return { ...user, nickname };
+  return { ...user, username };
 }

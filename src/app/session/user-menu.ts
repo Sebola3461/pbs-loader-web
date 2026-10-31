@@ -2,38 +2,53 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
-  effect,
   inject,
   signal,
   viewChild,
 } from '@angular/core';
 import { apiErrorMessage } from './api-error';
-import { GoogleButton } from './google-button';
-import { NicknameForm } from './nickname-form';
+import { LoginForm } from './login-form';
+import { PasswordForm } from './password-form';
 import { SessionStore } from './session.store';
+import { UsernameForm } from './username-form';
 
-/** Área de login no cabeçalho: botão do Google, ou apelido e "Sair". Abre a escolha de apelido quando falta. */
+type DialogKind = 'username' | 'password';
+
+/** Área de conta no cabeçalho: formulário de login, ou nome, senha e "Sair". */
 @Component({
   selector: 'app-user-menu',
-  imports: [GoogleButton, NicknameForm],
+  imports: [LoginForm, PasswordForm, UsernameForm],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (session.user(); as user) {
       <div class="user">
-        <button type="button" class="nickname" (click)="openDialog()" title="Trocar apelido">
-          {{ user.nickname ?? 'Escolher apelido' }}
+        <button type="button" class="username" (click)="open('username')" title="Trocar nome">
+          {{ user.username }}
+        </button>
+        <button
+          type="button"
+          class="button button-secondary"
+          (click)="open('password')"
+          title="Trocar senha"
+        >
+          Senha
         </button>
         <button type="button" class="button button-secondary" (click)="signOut()">Sair</button>
       </div>
       @if (error(); as message) {
         <p class="error" role="alert">{{ message }}</p>
       }
-    } @else if (session.googleClientId(); as clientId) {
-      <app-google-button [clientId]="clientId" />
+    } @else if (session.siteKey(); as siteKey) {
+      <app-login-form [siteKey]="siteKey" />
     }
-    <dialog #dialog aria-labelledby="apelido-titulo" (close)="dialogOpen.set(false)">
-      @if (dialogOpen()) {
-        <app-nickname-form (done)="closeDialog()" />
+    <dialog #renameDialog aria-labelledby="nome-titulo" (close)="closed('username')">
+      @if (isOpen('username')) {
+        <app-username-form (done)="close('username')" />
+      }
+    </dialog>
+    <dialog #passwordDialog aria-labelledby="senha-titulo" (close)="closed('password')">
+      @if (isOpen('password')) {
+        <app-password-form (done)="close('password')" />
       }
     </dialog>
   `,
@@ -48,7 +63,7 @@ import { SessionStore } from './session.store';
       align-items: center;
       gap: var(--space-2);
     }
-    .nickname {
+    .username {
       min-height: 2.75rem;
       padding-inline: var(--space-2);
       font: inherit;
@@ -58,7 +73,7 @@ import { SessionStore } from './session.store';
       border: 0;
       cursor: pointer;
     }
-    .nickname:hover {
+    .username:hover {
       text-decoration: underline;
     }
     .error {
@@ -81,25 +96,30 @@ import { SessionStore } from './session.store';
 })
 export class UserMenu {
   protected readonly session = inject(SessionStore);
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
-  protected readonly dialogOpen = signal(false);
+  private readonly renameDialog = viewChild.required<ElementRef<HTMLDialogElement>>('renameDialog');
+  private readonly passwordDialog =
+    viewChild.required<ElementRef<HTMLDialogElement>>('passwordDialog');
+  protected readonly openDialog = signal<DialogKind | null>(null);
   protected readonly error = signal<string | null>(null);
 
-  constructor() {
-    // Logou pela primeira vez e ainda não tem apelido: pergunta na hora.
-    effect(() => {
-      if (this.session.needsNickname()) this.openDialog();
-    });
+  protected isOpen(which: DialogKind): boolean {
+    return this.openDialog() === which;
   }
 
-  protected openDialog(): void {
-    this.dialogOpen.set(true);
-    const dialog = this.dialog().nativeElement;
-    if (!dialog.open) dialog.showModal();
+  protected open(which: DialogKind): void {
+    this.openDialog.set(which);
+    const dialog = which === 'username' ? this.renameDialog() : this.passwordDialog();
+    if (!dialog.nativeElement.open) dialog.nativeElement.showModal();
   }
 
-  protected closeDialog(): void {
-    this.dialog().nativeElement.close();
+  /** Chamado pelo botão dentro do diálogo e pelo próprio <dialog> (Esc). */
+  protected close(which: DialogKind): void {
+    const dialog = which === 'username' ? this.renameDialog() : this.passwordDialog();
+    if (dialog.nativeElement.open) dialog.nativeElement.close();
+  }
+
+  protected closed(which: DialogKind): void {
+    this.openDialog.update((current) => (current === which ? null : current));
   }
 
   protected async signOut(): Promise<void> {

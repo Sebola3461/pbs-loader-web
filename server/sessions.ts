@@ -61,7 +61,7 @@ export async function currentUser(db: Database, request: Request, now: Date): Pr
   const nowIso = now.toISOString();
   const row = await db
     .prepare(
-      `SELECT s.token_hash, s.last_seen_at, u.id, u.nickname, u.role, u.status
+      `SELECT s.token_hash, s.last_seen_at, u.id, u.username, u.role, u.status
        FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ? AND s.expires_at > ? AND s.last_seen_at > ?`,
     )
@@ -74,7 +74,7 @@ export async function currentUser(db: Database, request: Request, now: Date): Pr
       .bind(nowIso, row.token_hash)
       .run();
   }
-  return { id: row.id, nickname: row.nickname, role: row.role, status: row.status };
+  return { id: row.id, username: row.username, role: row.role, status: row.status };
 }
 
 /** Usuário logado e ativo, ou erro: 401 sem sessão, 403 banido. */

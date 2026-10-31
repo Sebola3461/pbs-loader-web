@@ -51,7 +51,7 @@ Depois, em Settings → Builds → Deploy hooks, crie um hook para a branch `mai
 
 A API fica em `functions/api/` e a lógica em `server/`. Ela guarda usuários, sessões e notas no D1.
 
-1. Crie o banco e aplique a migração:
+1. Crie o banco e aplique as migrações:
 
    ```
    npx wrangler d1 create pbs-loader-web
@@ -60,20 +60,35 @@ A API fica em `functions/api/` e a lógica em `server/`. Ela guarda usuários, s
 
    Copie o `database_id` que o primeiro comando mostra para o `wrangler.toml`.
 2. No projeto Pages, em Settings → Bindings, ligue o D1 com o nome `DB`.
-3. No Google Cloud, em APIs e serviços → Credenciais, crie um ID do cliente OAuth do tipo "Aplicativo da Web", com a origem JavaScript autorizada igual ao endereço do site (por exemplo `https://pbs-loader-web.pages.dev`). Não precisa de URI de redirecionamento.
-4. No projeto Pages, em Settings → Variables, crie `GOOGLE_CLIENT_ID` com esse ID. Ele é público, vai para o navegador.
+3. Crie uma conta no Turnstile (Cloudflare) para o domínio do site e no projeto Pages configure:
+   - `TURNSTILE_SITE_KEY` (pública, vai para o navegador);
+   - `TURNSTILE_SECRET_KEY` (segredo, cifrada — nunca no repositório).
+4. Crie o admin com o script de seed (pede a senha no terminal e só imprime os comandos SQL):
 
-Sem `GOOGLE_CLIENT_ID`, o site funciona só para leitura, sem o botão de login.
+   ```
+   node scripts/create-admin.mjs
+   ```
+
+   Depois rode o INSERT com `--local` (desenvolvimento) ou `--remote` (produção), como o script mostra.
+
+O login é usuário + senha com Turnstile. Sem as chaves do Turnstile configuradas, cadastro e login falham fechados (503) e o site fica só de leitura.
 
 ### Testar a API localmente
 
 ```
 CATALOG_SOURCE=fixtures/sample-catalog.json npm run build
 npx wrangler d1 migrations apply pbs-loader-web --local
-npx wrangler pages dev dist/pbs-loader-web/browser --binding GOOGLE_CLIENT_ID=<id>
+npx wrangler pages dev dist/pbs-loader-web/browser
 ```
 
+No local, o `wrangler.toml` já traz a chave de teste do Turnstile (sempre passa) e a secreta vem de `.dev.vars`.
+Opcional: `PBKDF2_ITERATIONS` ajusta as iterações do hash de senha — meça o tempo antes de reduzir.
+
 Os testes do servidor rodam no Node, com o SQLite embutido no lugar do D1: `npx vitest run --config vitest.server.config.ts`.
+
+### Admin do site
+
+O usuário administrador é criado pelo `scripts/create-admin.mjs` (padrão: username `HatsuneMiku`). Moderadores comuns ganham papel pelo banco (`role = 'moderator'`), sempre com evento no histórico.
 
 ## Licença
 

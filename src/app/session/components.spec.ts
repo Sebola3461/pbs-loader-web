@@ -3,33 +3,37 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { externalMod, githubMod, SITE_OWNER } from '../../testing/catalog-fixtures';
 import { CatalogMod } from '../catalog/catalog.model';
-import { GoogleButton, loadGoogleIdentity, resetGoogleIdentity } from './google-button';
-import { NicknameForm } from './nickname-form';
+import { LoginForm } from './login-form';
+import { PasswordForm } from './password-form';
 import { RatingsStore } from './ratings.store';
 import { SessionStore, SessionUser } from './session.store';
 import { formatAverage, StarRating } from './star-rating';
+import { loadTurnstile, resetTurnstileLoader } from './turnstile';
 import { UserMenu } from './user-menu';
+import { UsernameForm } from './username-form';
 
-const ANA: SessionUser = { id: 'u-ana', nickname: 'Ana', role: 'user' };
+const ANA: SessionUser = { id: 'u-ana', username: 'Ana', role: 'user' };
 const conflict = (code: string) => new HttpErrorResponse({ status: 409, error: { error: code } });
+const unauthorized = (code: string) => new HttpErrorResponse({ status: 401, error: { error: code } });
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
 function fakeSession(
-  initial: { loaded?: boolean; user?: SessionUser | null; clientId?: string } = {},
+  initial: { loaded?: boolean; user?: SessionUser | null; siteKey?: string } = {},
 ) {
   const user = signal<SessionUser | null>(initial.user ?? null);
-  const clientId = signal(initial.clientId ?? '');
+  const siteKey = signal(initial.siteKey ?? '');
   return {
     user,
-    clientId,
+    siteKey,
     store: {
       loaded: signal(initial.loaded ?? true),
       user,
-      googleClientId: clientId,
-      needsNickname: () => user()?.nickname === null,
-      signIn: vi.fn(async () => user.set(ANA)),
+      siteKey,
+      register: vi.fn(async () => user.set(ANA)),
+      login: vi.fn(async () => user.set(ANA)),
       signOut: vi.fn(async () => user.set(null)),
-      setNickname: vi.fn(async (nickname: string) => user.set({ ...ANA, nickname })),
+      setUsername: vi.fn(async (username: string) => user.set({ ...ANA, username })),
+      changePassword: vi.fn(async () => {}),
     },
   };
 }
@@ -52,6 +56,11 @@ function provide(session: ReturnType<typeof fakeSession>, ratings = fakeRatings(
   });
   return ratings;
 }
+
+const buttonByText = (el: HTMLElement, text: string) =>
+  [...el.querySelectorAll<HTMLButtonElement>('button')].find(
+    (b) => b.textContent?.trim() === text,
+  )!;
 
 beforeAll(() => {
   // O jsdom não implementa <dialog>.showModal/close.
@@ -100,14 +109,14 @@ describe('StarRating', () => {
   });
 
   it('antes de carregar a sessão não mostra nada de nota', () => {
-    const { el } = render(githubMod(), fakeSession({ loaded: false, clientId: 'cid' }));
+    const { el } = render(githubMod(), fakeSession({ loaded: false, siteKey: 'cid' }));
     expect(el.querySelector('fieldset')).toBeNull();
     expect(el.querySelector('.hint')).toBeNull();
   });
 
   it('deslogado com login disponível convida a entrar; sem login, não', () => {
-    let { el } = render(githubMod(), fakeSession({ clientId: 'cid' }));
-    expect(el.querySelector('.hint')?.textContent).toContain('Entre com sua conta Google');
+    let { el } = render(githubMod(), fakeSession({ siteKey: 'cid' }));
+    expect(el.querySelector('.hint')?.textContent).toContain('Crie sua conta ou entre');
     TestBed.resetTestingModule();
     ({ el } = render(githubMod(), fakeSession()));
     expect(el.querySelector('.hint')).toBeNull();
@@ -160,16 +169,16 @@ describe('StarRating', () => {
   });
 });
 
-describe('NicknameForm', () => {
-  function render(session = fakeSession({ user: { ...ANA, nickname: null } })) {
+describe('UsernameForm', () => {
+  function render(session = fakeSession({ user: ANA })) {
     provide(session);
-    const fixture = TestBed.createComponent(NicknameForm);
+    const fixture = TestBed.createComponent(UsernameForm);
     const done = vi.fn();
     fixture.componentInstance.done.subscribe(done);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     const submit = async (value: string) => {
-      el.querySelector<HTMLInputElement>('#apelido')!.value = value;
+      el.querySelector<HTMLInputElement>('#nome')!.value = value;
       el.querySelector('form')!.dispatchEvent(new Event('submit'));
       await settle();
       fixture.detectChanges();
@@ -177,29 +186,63 @@ describe('NicknameForm', () => {
     return { el, done, submit, session };
   }
 
-  it('salva e avisa que terminou; sem apelido anterior não há "Cancelar"', async () => {
+  it('salva e avisa que terminou', async () => {
     const { el, done, submit, session } = render();
-    expect(el.querySelector('.button-secondary')).toBeNull();
     await submit('Ana Silva');
-    expect(session.store.setNickname).toHaveBeenCalledWith('Ana Silva');
+    expect(session.store.setUsername).toHaveBeenCalledWith('Ana Silva');
     expect(done).toHaveBeenCalledOnce();
   });
 
   it('mostra o erro da API e marca o campo', async () => {
-    const session = fakeSession({ user: { ...ANA, nickname: null } });
-    session.store.setNickname.mockRejectedValueOnce(conflict('nickname_taken'));
+    const session = fakeSession({ user: ANA });
+    session.store.setUsername.mockRejectedValueOnce(conflict('username_taken'));
     const { el, done, submit } = render(session);
     await submit('Ana');
-    expect(el.querySelector('.error')?.textContent).toBe('Esse apelido já está em uso.');
-    expect(el.querySelector('#apelido')?.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector('.error')?.textContent).toBe('Esse nome já está em uso.');
+    expect(el.querySelector('#nome')?.getAttribute('aria-invalid')).toBe('true');
     expect(done).not.toHaveBeenCalled();
   });
 
-  it('com apelido atual, preenche o campo e permite cancelar', () => {
+  it('preenche o campo com o nome atual e permite cancelar', () => {
     const { el, done } = render(fakeSession({ user: ANA }));
-    expect(el.querySelector<HTMLInputElement>('#apelido')?.value).toBe('Ana');
+    expect(el.querySelector<HTMLInputElement>('#nome')?.value).toBe('Ana');
     el.querySelector<HTMLButtonElement>('.button-secondary')!.click();
     expect(done).toHaveBeenCalledOnce();
+  });
+});
+
+describe('PasswordForm', () => {
+  function render(session = fakeSession({ user: ANA })) {
+    provide(session);
+    const fixture = TestBed.createComponent(PasswordForm);
+    const done = vi.fn();
+    fixture.componentInstance.done.subscribe(done);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const submit = async (current: string, next: string) => {
+      el.querySelector<HTMLInputElement>('#senha-atual')!.value = current;
+      el.querySelector<HTMLInputElement>('#nova-senha')!.value = next;
+      el.querySelector('form')!.dispatchEvent(new Event('submit'));
+      await settle();
+      fixture.detectChanges();
+    };
+    return { el, done, submit, session };
+  }
+
+  it('manda atual e nova e avisa que terminou', async () => {
+    const { done, submit, session } = render();
+    await submit('velha-forte-1', 'nova-forte-99');
+    expect(session.store.changePassword).toHaveBeenCalledWith('velha-forte-1', 'nova-forte-99');
+    expect(done).toHaveBeenCalledOnce();
+  });
+
+  it('senha atual errada aparece como erro e não fecha', async () => {
+    const session = fakeSession({ user: ANA });
+    session.store.changePassword.mockRejectedValueOnce(conflict('wrong_password'));
+    const { el, done, submit } = render(session);
+    await submit('errada-total', 'nova-forte-99');
+    expect(el.querySelector('.error')?.textContent).toBe('A senha atual não confere.');
+    expect(done).not.toHaveBeenCalled();
   });
 });
 
@@ -213,79 +256,89 @@ describe('UserMenu', () => {
 
   it('sem login disponível não mostra nada', () => {
     const { el } = render(fakeSession());
-    expect(el.querySelector('app-google-button')).toBeNull();
+    expect(el.querySelector('app-login-form')).toBeNull();
     expect(el.querySelector('.user')).toBeNull();
   });
 
-  it('deslogado com client ID mostra o botão do Google', () => {
-    const { el } = render(fakeSession({ clientId: 'cid' }));
-    expect(el.querySelector('app-google-button')).not.toBeNull();
+  it('deslogado com chave do Turnstile mostra o formulário', () => {
+    const { el } = render(fakeSession({ siteKey: 'cid' }));
+    expect(el.querySelector('app-login-form')).not.toBeNull();
   });
 
-  it('logado mostra o apelido e sai', async () => {
-    const session = fakeSession({ user: ANA, clientId: 'cid' });
+  it('logado mostra o nome e sai', async () => {
+    const session = fakeSession({ user: ANA, siteKey: 'cid' });
     const { el, fixture } = render(session);
-    expect(el.querySelector('.nickname')?.textContent?.trim()).toBe('Ana');
-    el.querySelector<HTMLButtonElement>('.button-secondary')!.click();
+    expect(el.querySelector('.username')?.textContent?.trim()).toBe('Ana');
+    buttonByText(el, 'Sair').click();
     await settle();
     fixture.detectChanges();
     expect(session.store.signOut).toHaveBeenCalled();
-    expect(el.querySelector('app-google-button')).not.toBeNull();
   });
 
   it('erro ao sair aparece', async () => {
     const session = fakeSession({ user: ANA });
     session.store.signOut.mockRejectedValueOnce(new Error('rede'));
     const { el, fixture } = render(session);
-    el.querySelector<HTMLButtonElement>('.button-secondary')!.click();
+    buttonByText(el, 'Sair').click();
     await settle();
     fixture.detectChanges();
     expect(el.querySelector('.error')?.textContent).toBe('Algo deu errado. Tente de novo.');
   });
 
-  it('sem apelido abre a escolha na hora; salvar fecha', async () => {
-    const session = fakeSession({ user: { ...ANA, nickname: null } });
+  it('clicar no nome abre a troca; salvar fecha', async () => {
+    const session = fakeSession({ user: ANA });
     const { el, fixture } = render(session);
+    el.querySelector<HTMLButtonElement>('.username')!.click();
     fixture.detectChanges();
     const dialog = el.querySelector('dialog')!;
     expect(dialog.open).toBe(true);
-    expect(el.querySelector('.nickname')?.textContent?.trim()).toBe('Escolher apelido');
-    el.querySelector<HTMLInputElement>('#apelido')!.value = 'Ana';
+    el.querySelector<HTMLInputElement>('#nome')!.value = 'Ana Silva';
     el.querySelector('form')!.dispatchEvent(new Event('submit'));
     await settle();
     fixture.detectChanges();
-    expect(dialog.open).toBe(false);
-    expect(el.querySelector('app-nickname-form')).toBeNull();
+    expect(session.store.setUsername).toHaveBeenCalledWith('Ana Silva');
+    expect(el.querySelector('app-username-form')).toBeNull();
   });
 
-  it('clicar no apelido abre a troca', () => {
+  it('clicar em Senha abre a troca de senha', () => {
     const { el, fixture } = render(fakeSession({ user: ANA }));
-    el.querySelector<HTMLButtonElement>('.nickname')!.click();
+    buttonByText(el, 'Senha').click();
     fixture.detectChanges();
-    expect(el.querySelector('dialog')!.open).toBe(true);
-    el.querySelector<HTMLButtonElement>('.nickname')!.click();
-    expect(el.querySelector('dialog')!.open).toBe(true);
+    expect(el.querySelector('app-password-form')).not.toBeNull();
   });
 });
 
-describe('GoogleButton', () => {
-  beforeEach(() => resetGoogleIdentity());
+describe('Turnstile', () => {
+  beforeEach(() => resetTurnstileLoader());
 
-  interface FakeGoogle {
-    callback?: (r: { credential: string }) => void;
-    rendered: HTMLElement[];
+  interface FakeTurnstile {
+    rendered: Array<{
+      el: HTMLElement;
+      options: {
+        sitekey: string;
+        callback: (token: string) => void;
+        'expired-callback'?: () => void;
+        'error-callback'?: () => void;
+      };
+    }>;
+    resets: number;
+    removed: number;
   }
 
-  function installGoogle(fail = false): FakeGoogle {
-    const fake: FakeGoogle = { rendered: [] };
+  function installTurnstile(fail = false): FakeTurnstile {
+    const fake: FakeTurnstile = { rendered: [], resets: 0, removed: 0 };
     const append = vi.spyOn(document.head, 'appendChild').mockImplementation(((node: Node) => {
       const script = node as HTMLScriptElement;
-      (window as unknown as { google: unknown }).google = {
-        accounts: {
-          id: {
-            initialize: (o: { callback: FakeGoogle['callback'] }) => (fake.callback = o.callback),
-            renderButton: (el: HTMLElement) => fake.rendered.push(el),
-          },
+      (window as unknown as { turnstile: unknown }).turnstile = {
+        render: (el: HTMLElement, options: FakeTurnstile['rendered'][0]['options']) => {
+          fake.rendered.push({ el, options });
+          return `wid-${fake.rendered.length}`;
+        },
+        reset: () => {
+          fake.resets++;
+        },
+        remove: () => {
+          fake.removed++;
         },
       };
       setTimeout(() =>
@@ -300,61 +353,87 @@ describe('GoogleButton', () => {
   it('carrega o script uma vez e reaproveita', async () => {
     const append = vi.spyOn(document.head, 'appendChild').mockImplementation(((node: Node) => {
       setTimeout(() => (node as HTMLScriptElement).onload?.(new Event('load')));
+      (window as unknown as { turnstile: unknown }).turnstile = { ok: true };
       return node;
     }) as typeof document.head.appendChild);
-    (window as unknown as { google: unknown }).google = { ok: true };
-    const first = loadGoogleIdentity(document);
-    const second = loadGoogleIdentity(document);
+    const first = loadTurnstile(document);
+    const second = loadTurnstile(document);
     expect(await first).toEqual({ ok: true });
     expect(await second).toEqual({ ok: true });
     expect(append).toHaveBeenCalledOnce();
     append.mockRestore();
   });
 
-  it('desenha o botão e troca o token por sessão', async () => {
-    const fake = installGoogle();
-    const session = fakeSession({ clientId: 'cid' });
+  function renderForm(session = fakeSession({ siteKey: 'cid' })) {
     provide(session);
-    const fixture = TestBed.createComponent(GoogleButton);
-    fixture.componentRef.setInput('clientId', 'cid');
+    const fixture = TestBed.createComponent(LoginForm);
+    fixture.componentRef.setInput('siteKey', 'cid');
     fixture.detectChanges();
-    await fixture.whenStable();
+    return { session, fixture, el: fixture.nativeElement as HTMLElement };
+  }
+
+  it('mostra o widget, entra com o token e limpa o widget ao sair da página', async () => {
+    const fake = installTurnstile();
+    const session = renderForm();
+    await session.fixture.whenStable();
     await new Promise((r) => setTimeout(r, 10));
     expect(fake.rendered).toHaveLength(1);
-    fake.callback?.({ credential: 'tok' });
+    expect(fake.rendered[0].options.sitekey).toBe('cid');
+    fake.rendered[0].options.callback('tok');
     await settle();
-    expect(session.store.signIn).toHaveBeenCalledWith('tok');
+    session.fixture.detectChanges();
+    const el = session.el;
+    el.querySelector<HTMLInputElement>('#usuario')!.value = 'Ana';
+    el.querySelector<HTMLInputElement>('#senha')!.value = 'senha-forte-1';
+    el.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await settle();
+    expect(session.session.store.login).toHaveBeenCalledWith('Ana', 'senha-forte-1', 'tok');
+    session.fixture.destroy();
+    expect(fake.removed).toBe(1);
+  });
+
+  it('alternar para criar conta chama register', async () => {
+    const fake = installTurnstile();
+    const session = renderForm();
+    await session.fixture.whenStable();
+    await new Promise((r) => setTimeout(r, 10));
+    fake.rendered[0].options.callback('tok');
+    await settle();
+    buttonByText(session.el, 'Criar conta').click();
+    session.fixture.detectChanges();
+    session.el.querySelector<HTMLInputElement>('#usuario')!.value = 'Bia';
+    session.el.querySelector<HTMLInputElement>('#senha')!.value = 'senha-forte-1';
+    session.el.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await settle();
+    expect(session.session.store.register).toHaveBeenCalledWith('Bia', 'senha-forte-1', 'tok');
   });
 
   it('script bloqueado avisa e permite tentar de novo depois', async () => {
-    installGoogle(true);
-    provide(fakeSession({ clientId: 'cid' }));
-    const fixture = TestBed.createComponent(GoogleButton);
-    fixture.componentRef.setInput('clientId', 'cid');
-    fixture.detectChanges();
-    await fixture.whenStable();
+    installTurnstile(true);
+    const session = renderForm();
+    await session.fixture.whenStable();
     await new Promise((r) => setTimeout(r, 10));
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.error')?.textContent).toContain('não carregou');
+    session.fixture.detectChanges();
+    expect(session.el.querySelector('.error')?.textContent).toContain('não carregou');
   });
 
-  it('erro no login aparece embaixo do botão', async () => {
-    const fake = installGoogle();
-    const session = fakeSession({ clientId: 'cid' });
-    session.store.signIn.mockRejectedValueOnce(
-      new HttpErrorResponse({ status: 401, error: { error: 'invalid_token' } }),
-    );
-    provide(session);
-    const fixture = TestBed.createComponent(GoogleButton);
-    fixture.componentRef.setInput('clientId', 'cid');
-    fixture.detectChanges();
-    await fixture.whenStable();
+  it('erro no login reseta o desafio e pede um token novo', async () => {
+    const fake = installTurnstile();
+    const session = renderForm();
+    await session.fixture.whenStable();
     await new Promise((r) => setTimeout(r, 10));
-    fake.callback?.({ credential: 'tok' });
+    fake.rendered[0].options.callback('tok');
     await settle();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.error')?.textContent).toContain(
-      'Não deu para confirmar',
+    session.session.store.login.mockRejectedValueOnce(unauthorized('invalid_credentials'));
+    session.el.querySelector<HTMLInputElement>('#usuario')!.value = 'Ana';
+    session.el.querySelector<HTMLInputElement>('#senha')!.value = 'senha-errada-9';
+    session.el.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await settle();
+    session.fixture.detectChanges();
+    expect(session.el.querySelector('.error')?.textContent).toContain('incorretos');
+    expect(fake.resets).toBe(1);
+    expect(session.el.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(
+      true,
     );
   });
 });

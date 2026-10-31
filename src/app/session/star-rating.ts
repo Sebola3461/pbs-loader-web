@@ -57,8 +57,8 @@ export function formatAverage(average: number): string {
             Remover minha nota
           </button>
         }
-      } @else if (session.googleClientId()) {
-        <p class="hint">Entre com sua conta Google, no topo da página, para avaliar.</p>
+      } @else if (session.siteKey()) {
+        <p class="hint">Crie sua conta ou entre, no topo da página, para avaliar.</p>
       }
       @if (error(); as message) {
         <p class="error" role="alert">{{ message }}</p>

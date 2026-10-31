@@ -48,3 +48,6 @@ Thumbs.db
 
 # Estado local do wrangler (D1 local, cache)
 /.wrangler
+
+# Segredos locais das Pages Functions (wrangler pages dev)
+.dev.vars
