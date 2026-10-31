@@ -7,29 +7,18 @@ import { SITE_LINKS } from '../../site-links';
   imports: [ModBrowser],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="hero">
-      <h1>Mods para o Proton Bus Simulator</h1>
-      <p class="lead">
-        Plugins, ônibus, mapas e skins feitos pela comunidade. Os plugins instalam pelo
-        <a [href]="links.loader" rel="noopener">PBS Loader</a>.
-      </p>
-    </section>
+    <!-- O título visível saiu por decisão de design; o h1 oculto preserva a hierarquia de headings. -->
+    <h1 class="visually-hidden">Mods do PBS Loader</h1>
+    <p class="lead">
+      Plugins, ônibus, mapas e skins feitos pela comunidade. Os plugins instalam pelo
+      <a [href]="links.loader" rel="noopener">PBS Loader</a>.
+    </p>
     <app-mod-browser ngSkipHydration />
   `,
   styles: `
-    /* Linha âmbar de painel: o "farol" que ancora a marca (DESIGN.md, hero da home). */
-    .hero {
-      margin-block: var(--space-6) var(--space-5);
-      padding-top: var(--space-4);
-      border-top: 3px solid var(--color-primary);
-    }
-    .hero h1 {
-      font-size: clamp(2rem, 1.4rem + 2.5vw, 3rem);
-      line-height: 1.1;
-    }
     .lead {
-      margin-top: var(--space-2);
       max-width: 60ch;
+      margin-block: var(--space-4) var(--space-5);
       color: var(--color-muted-foreground);
     }
   `,

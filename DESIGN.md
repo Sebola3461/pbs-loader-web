@@ -98,7 +98,7 @@ Contraste verificado (WCAG AA): #E8EAEE sobre #0B0D12 ≈ 14.8:1; #9AA3B2 sobre 
 
 | Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
 |------|------|------|--------|-------------|----------------|-------|
-| Display Hero | Russo One | clamp(2rem, 1.4rem + 2.5vw, 3rem) | 400 | 1.1 | 0.01em | Home hero |
+| Display Hero | Russo One | clamp(2rem, 1.4rem + 2.5vw, 3rem) | 400 | 1.1 | 0.01em | Reservado; a home não exibe título visível (decisão 2026-10-31) |
 | Section Heading | Russo One | clamp(1.375rem, 1.2rem + 0.8vw, 1.75rem) | 400 | 1.2 | 0.01em | H1/H2 de página |
 | Sub-heading | Chakra Petch | 1.125rem | 600 | 1.3 | 0 | H3, títulos de card |
 | Body | Chakra Petch | 1rem | 400 | 1.55 | 0 | Texto corrente |
@@ -171,7 +171,7 @@ Russo One só existe no peso 400 — nunca fingir peso com stroke. Chakra Petch 
 | Border Bottom | 1px solid #262C3A |
 | Link Color | #9AA3B2 |
 | Link Hover | #E8EAEE sobre #191E28 |
-| Active Link | #FFB020 + underline de 2px âmbar |
+| Active Link | #FFB020, peso 600, sem sublinhado (o raio do link curvava a linha) |
 | Brand Mark | #171208 sobre #FFB020, Russo One |
 
 ## 5. Layout Principles
@@ -282,9 +282,9 @@ Grid de cards: `repeat(auto-fit, minmax(16rem, 1fr))` — sem media query para c
 ### Example Component Prompts
 
 **Hero da home:**
-"Hero sobre #0B0D12 com linha de detalhe âmbar 3px no topo (o farol). H1 em Russo One
-clamp(2rem, 1.4rem + 2.5vw, 3rem), cor #E8EAEE. Lead em Chakra Petch 1rem #9AA3B2,
-max-width 60ch. Sem gradientes."
+"Sem título visível (decisão de design): intro curta em Chakra Petch 1rem #9AA3B2,
+max-width 60ch, direto acima da busca. h1 oculto preserva a hierarquia. Sem
+gradientes e sem linha decorativa."
 
 **Mod card:**
 "Card em #12151D, borda 1px #262C3A, radius 0.5rem, padding 1rem. Título Chakra Petch
