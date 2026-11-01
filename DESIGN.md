@@ -176,7 +176,7 @@ Russo One só existe no peso 400 — nunca fingir peso com stroke. Chakra Petch 
 | Hover BG | #191E28 |
 | Accent | #FFB020 |
 
-Uso: só rádio (origem do arquivo) e seleção de imagens da galeria. Versões do jogo usam `select[multiple]` (min-height 9rem, altura auto).
+Uso: rádio da origem do arquivo (apenas plugin — ônibus e mapa são externa-only) e seleção de imagens da galeria. Versões do jogo usam `select[multiple]` (min-height 9rem, altura auto).
 
 ### Select múltiplo de versões
 | Property | Value |
@@ -186,12 +186,22 @@ Uso: só rádio (origem do arquivo) e seleção de imagens da galeria. Versões 
 | Selected | accent #FFB020; dica "Ctrl (ou Cmd) para várias" |
 | Fallback | sem versões no catálogo, input manual numérico |
 
+### Download por tipo
+| Tipo | Origem possível |
+|------|-----------------|
+| plugin | Release no GitHub (repo, tag, arquivo .dll) ou link externo |
+| skin, destino, som, outro | Release no GitHub (.zip) ou link externo |
+| onibus, mapa | Só link externo — sem origem, tag ou arquivo (recusado também no servidor) |
+
 ### Busca no GitHub (github-fetch)
 | Property | Value |
 |----------|-------|
-| Layout | input flex + botão secundário na mesma linha |
+| Repositório | aceita `dono/repo` ou o link completo do GitHub (`https://github.com/dono/repo`) |
+| Releases | busca automática com debounce ~600 ms ao digitar — sem botão; "Buscando releases…" em form-hint |
+| Sugestões | datalist no próprio campo (sem campos duplicados): tag deriva `FreeWalk-v1.0` → `FreeWalk-v`; arquivo = assets das releases; autocompleta campos vazios |
+| Falhas | aviso em form-hint (não erro vermelho); repositório inválido não chama a API |
+| Galeria | botão "Buscar imagens" explícito; grade selecionável |
 | Endpoints | `api.github.com` público: releases (tag/arquivo) e git trees (galeria) |
-| Estados | botão "Buscando…" enquanto carrega; avisos em form-hint; falha em form-error |
 | CSP | `connect-src` inclui `https://api.github.com` |
 
 ### Grade de imagens da galeria (galeria-pick)
@@ -202,15 +212,6 @@ Uso: só rádio (origem do arquivo) e seleção de imagens da galeria. Versões 
 | Miniatura | aspect-ratio 16/9, object-fit cover, lazy |
 | Nome do arquivo | 0.75rem, ellipsis em uma linha |
 | Limite | 10 imagens por mod |
-
-### Chips de dependência
-| Property | Value |
-|----------|-------|
-| Background | #2E2410 |
-| Border | 1px solid #FFB020 |
-| Border Radius | 999px |
-| Font | Chakra Petch 0.875rem 600 |
-| Remover | botão circular 1.5rem, hover rgb(0 0 0 / 0.2) |
 
 ### Navigation
 | Property | Value |

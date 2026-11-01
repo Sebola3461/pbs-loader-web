@@ -158,6 +158,8 @@ function modPayloadFrom(
   if (id !== modId || !MOD_ID.test(id)) invalidPayload();
   const tipo = mod.tipo;
   if (typeof tipo !== 'string' || !MOD_TYPES.includes(tipo as ModType)) invalidPayload();
+  // Ônibus e mapa são distribuídos por link externo: release do GitHub só faz sentido para o resto.
+  if ((tipo === 'onibus' || tipo === 'mapa') && mod.origem === 'github') invalidPayload();
   const pagina = mod.pagina === null ? null : httpsUrl(mod.pagina);
   const source =
     mod.origem === 'github'

@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   computed,
   effect,
@@ -38,10 +39,32 @@ interface GithubTree {
 /** Extensões aceitas como imagem de galeria. */
 const IMAGEM_EXT = /\.(png|jpe?g|webp|gif|avif)$/i;
 const MAX_IMAGENS = 10;
+/** Mesma regra do servidor para o id técnico do mod. */
+const MOD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/;
+/** Mesma regra do servidor para dono/repo. */
+const REPO = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/;
+/** Tipos que o catálogo distribui só por link externo. */
+const SO_EXTERNA: ReadonlySet<string> = new Set(['onibus', 'mapa']);
+/** Pausa entre o autor parar de digitar e a busca no GitHub sair. */
+const DEBOUNCE_MS = 600;
+
+/**
+ * Extrai dono/repo tanto de "dono/repo" quanto de um link completo do GitHub
+ * (https://github.com/dono/repo/…, com ou sem .git e barra final).
+ */
+export function normalizarRepo(valor: string): string {
+  const partes = valor
+    .trim()
+    .replace(/^https?:\/\/(www\.)?github\.com\/?/i, '')
+    .replace(/\.git$/i, '')
+    .split(/[/?#]/)
+    .filter(Boolean);
+  return partes.length >= 2 ? `${partes[0]}/${partes[1]}` : '';
+}
 
 /**
  * Converte o nome do mod no id técnico: sem acentos, minúsculo, separado por traços.
- * O id é gerado automaticamente — o autor não precisa conhecer a regra de formato.
+ * O id nasce automaticamente — mas o autor ainda pode ajustá-lo à mão.
  */
 export function slugifyId(nome: string): string {
   return nome
@@ -54,7 +77,7 @@ export function slugifyId(nome: string): string {
 }
 
 /**
- * Deriva o prefixo de tag do nome de uma tag existente: PainelDigital-v1.2 → PainelDigital-v.
+ * Deriva o prefixo de tag do nome de uma tag existente: FreeWalk-v1.0 → FreeWalk-v.
  * Mantém o "v" porque é o padrão usado pelos mods do catálogo; tags sem versão ficam como estão.
  */
 export function prefixoDeTag(tag: string): string {
@@ -62,9 +85,10 @@ export function prefixoDeTag(tag: string): string {
 }
 
 /**
- * Formulário de envio — e de edição/remoção, quando a rota traz autor e id. Id nasce do nome; versões,
- * dependências, tag, arquivo e imagens da galeria vêm de listas: do catálogo e da API pública do GitHub.
- * A chave de idempotência nasce quando o formulário abre e só troca depois de um envio aceito.
+ * Formulário de envio — e de edição/remoção, quando a rota traz autor e id. Id acompanha o nome
+ * (com ajuste manual possível); versões vêm do catálogo; releases e imagens chegam da API pública
+ * do GitHub assim que o repositório é informado. A chave de idempotência nasce quando o formulário
+ * abre e só troca depois de um envio aceito.
  */
 @Component({
   selector: 'app-submit',
@@ -91,7 +115,6 @@ export class Submit {
   protected readonly prefill = computed(() => {
     const mod = this.original();
     if (!mod) return null;
-    const github = mod.origem === 'github' ? mod : null;
     const externa = mod.origem === 'externa' ? mod : null;
     return {
       nome: mod.nome,
@@ -121,21 +144,34 @@ export class Submit {
   protected readonly carregandoCapa = signal(false);
   protected readonly removing = signal(false);
   protected readonly versoesSelecionadas = signal<Set<string>>(new Set());
-  protected readonly dependenciasEscolhidas = signal<string[]>([]);
 
-  // Campos guiados por signal: o mesmo valor alimenta o envio e as escolhas do GitHub.
+  // Campos guiados por signal: o mesmo valor alimenta o envio e as sugestões do GitHub.
   protected readonly nome = signal('');
+  protected readonly idManual = signal<string | null>(null);
   protected readonly idAuto = computed(() => slugifyId(this.nome()));
+  /** Enquanto o autor não editar o id à mão, ele acompanha o nome. */
+  protected readonly idAtual = computed(() => this.idManual() ?? this.idAuto());
+  protected readonly tipo = signal('plugin');
+  /** Ônibus e mapa não têm arquivo nem release: só link externo de download. */
+  protected readonly somenteExterna = computed(() => SO_EXTERNA.has(this.tipo()));
+  protected readonly origemEfetiva = computed(() =>
+    this.somenteExterna() ? 'externa' : this.origem(),
+  );
   protected readonly repo = signal('');
   protected readonly tagValor = signal('');
   protected readonly arquivoValor = signal('');
   protected readonly galeriaRepo = signal('');
+  /** Dependências não são editadas pelo site; na edição elas seguem como estão. */
+  protected readonly dependencias = computed(() => this.original()?.dependencias ?? []);
 
-  // Releases do repositório: sugestões de prefixo de tag e de arquivo do mod.
+  // Releases do repositório: sugestões de prefixo de tag (datalist) e de arquivo.
   protected readonly tagsGithub = signal<string[]>([]);
   protected readonly assetsGithub = signal<string[]>([]);
   protected readonly buscandoReleases = signal(false);
   protected readonly avisoReleases = signal<string | null>(null);
+  protected readonly sugestoesTag = computed(() => [
+    ...new Set(this.tagsGithub().map(prefixoDeTag)),
+  ]);
 
   // Galeria: imagens listadas da árvore do repositório, escolhidas pelo autor.
   protected readonly imagensGaleria = signal<Array<{ url: string; label: string }>>([]);
@@ -147,14 +183,16 @@ export class Submit {
   private readonly erro = viewChild<ElementRef<HTMLElement>>('erro');
   private readonly removeDialog = viewChild.required<ElementRef<HTMLDialogElement>>('removeDialog');
   private idempotencyKey = crypto.randomUUID();
+  private repoTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => clearTimeout(this.repoTimer));
     // Na edição, as seleções partem do estado atual do mod (a pré-preencher roda uma vez).
     effect(() => {
       const mod = this.original();
       if (this.editing() && mod && !this.preenchido()) {
         this.versoesSelecionadas.set(new Set(mod.versoesDoJogo));
-        this.dependenciasEscolhidas.set([...mod.dependencias]);
+        this.tipo.set(mod.tipo);
         this.imagensSelecionadas.set(new Set(mod.imagens ?? []));
         const github = mod.origem === 'github' ? mod : null;
         if (github) {
@@ -162,6 +200,8 @@ export class Submit {
           this.tagValor.set(github.tag);
           this.arquivoValor.set(github.arquivo);
           this.galeriaRepo.set(github.repo);
+          // Repo já conhecido: as sugestões chegam sozinhas, como no envio novo.
+          this.repoTimer = setTimeout(() => void this.buscarReleases(), DEBOUNCE_MS);
         }
         this.preenchido.set(true);
       }
@@ -182,11 +222,23 @@ export class Submit {
     this.nome.set((event.target as HTMLInputElement).value);
   }
 
+  /** Id editável: deixa de acompanhar o nome na primeira alteração (campo vazio volta ao automático). */
+  protected atualizarId(event: Event): void {
+    const valor = (event.target as HTMLInputElement).value;
+    this.idManual.set(valor.trim() === '' ? null : valor);
+  }
+
+  protected atualizarTipo(event: Event): void {
+    this.tipo.set((event.target as HTMLSelectElement).value);
+    if (this.somenteExterna()) this.origem.set('externa');
+  }
+
   protected atualizarRepo(event: Event): void {
     const valor = (event.target as HTMLInputElement).value;
     this.repo.set(valor);
     // Nas origens GitHub, imagens moram no mesmo repositório: a galeria acompanha.
-    if (this.origem() === 'github') this.galeriaRepo.set(valor);
+    if (this.origemEfetiva() === 'github') this.galeriaRepo.set(valor);
+    this.agendarBuscaReleases();
   }
 
   protected atualizarTag(event: Event): void {
@@ -201,42 +253,23 @@ export class Submit {
     this.galeriaRepo.set((event.target as HTMLInputElement).value);
   }
 
-  protected escolherTag(tag: string): void {
-    if (tag) this.tagValor.set(prefixoDeTag(tag));
-  }
-
-  protected escolherArquivo(nome: string): void {
-    if (nome) this.arquivoValor.set(nome);
-  }
-
-  /** Só mods que existem no catálogo podem ser dependência (menos o próprio, na edição). */
-  protected readonly opcoesDependencia = computed(() => {
-    const escolhidas = new Set(this.dependenciasEscolhidas());
-    const proprioId = this.editing() ? this.id() : null;
-    return this.catalog.mods
-      .filter((m) => m.id !== proprioId && !escolhidas.has(m.id))
-      .map((m) => ({ id: m.id, nome: m.nome }))
-      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  });
-
-  protected adicionarDependencia(id: string): void {
-    if (!id || this.dependenciasEscolhidas().includes(id)) return;
-    this.dependenciasEscolhidas.update((atual) => [...atual, id]);
-  }
-
-  protected removerDependencia(id: string): void {
-    this.dependenciasEscolhidas.update((atual) => atual.filter((d) => d !== id));
+  /** Repositório informado → releases chegam sozinhas depois de uma pequena pausa na digitação. */
+  protected agendarBuscaReleases(): void {
+    clearTimeout(this.repoTimer);
+    this.repoTimer = setTimeout(() => void this.buscarReleases(), DEBOUNCE_MS);
   }
 
   /** Releases do repositório alimentam as sugestões de tag e de arquivo — uma chamada só. */
   protected async buscarReleases(): Promise<void> {
-    const repo = this.repo().trim();
-    if (!repo) {
-      this.fail('Preencha o repositório antes de buscar as releases.');
+    const repo = normalizarRepo(this.repo());
+    this.tagsGithub.set([]);
+    this.assetsGithub.set([]);
+    this.avisoReleases.set(null);
+    if (!REPO.test(repo)) {
+      this.avisoReleases.set('Repositório inválido: use dono/repo ou o link do GitHub.');
       return;
     }
     this.buscandoReleases.set(true);
-    this.avisoReleases.set(null);
     this.error.set(null);
     try {
       const releases = await firstValueFrom(
@@ -246,13 +279,21 @@ export class Submit {
       this.assetsGithub.set([
         ...new Set(releases.flatMap((r) => r.assets.map((a) => a.name)).filter(Boolean)),
       ]);
-      this.avisoReleases.set(
-        releases.length
-          ? null
-          : 'O repositório ainda não tem releases: informe o prefixo da tag e o arquivo à mão.',
-      );
+      if (!this.tagsGithub().length) {
+        this.avisoReleases.set(
+          'O repositório ainda não tem releases: informe a tag e o arquivo à mão.',
+        );
+      } else {
+        // Autocompleta com a sugestão mais óbvia, sem apagar o que o autor já escolheu.
+        if (!this.tagValor()) this.tagValor.set(prefixoDeTag(this.tagsGithub()[0]));
+        if (!this.arquivoValor() && this.assetsGithub().length) {
+          this.arquivoValor.set(this.assetsGithub()[0]);
+        }
+      }
     } catch {
-      this.fail('Não consegui buscar as releases no GitHub. Verifique o repositório (dono/nome).');
+      this.avisoReleases.set(
+        'Não consegui buscar as releases no GitHub. Confira o repositório — ou preencha a tag e o arquivo à mão.',
+      );
     } finally {
       this.buscandoReleases.set(false);
     }
@@ -260,9 +301,9 @@ export class Submit {
 
   /** Lista as imagens da árvore do repositório (API pública, sem login) para o autor escolher. */
   protected async buscarImagens(): Promise<void> {
-    const repo = this.galeriaRepo().trim();
-    if (!repo) {
-      this.fail('Informe o repositório das imagens antes de buscar.');
+    const repo = normalizarRepo(this.galeriaRepo());
+    if (!REPO.test(repo)) {
+      this.fail('Informe o repositório das imagens: dono/repo ou o link do GitHub.');
       return;
     }
     this.buscandoImagens.set(true);
@@ -293,7 +334,7 @@ export class Submit {
           : 'Nenhuma imagem (png, jpg, webp, gif ou avif) encontrada no repositório.',
       );
     } catch {
-      this.fail('Não consegui listar as imagens do repositório. Verifique o endereço (dono/nome).');
+      this.fail('Não consegui listar as imagens do repositório. Verifique o endereço.');
     } finally {
       this.buscandoImagens.set(false);
     }
@@ -323,9 +364,13 @@ export class Submit {
     const form = event.target as HTMLFormElement;
     const value = (name: string) => (form.elements.namedItem(name) as HTMLInputElement).value.trim();
 
-    const modId = this.editing() ? this.id()! : this.idAuto();
+    const modId = this.editing() ? this.id()! : this.idAtual();
     if (!modId) {
       this.fail('Escreva o nome do mod: o id é gerado a partir dele.');
+      return;
+    }
+    if (!MOD_ID.test(modId)) {
+      this.fail('O id aceita letras, números, "_" ou "-", começando por letra ou número.');
       return;
     }
 
@@ -344,10 +389,13 @@ export class Submit {
       this.fail('As versões do jogo são números de até 6 dígitos, como 307.');
       return;
     }
-    const dependencias = this.dependenciasEscolhidas();
-    if (dependencias.length > 20) {
-      this.fail('No máximo 20 dependências.');
-      return;
+    const origem = this.origemEfetiva();
+    if (origem === 'github') {
+      const repo = normalizarRepo(this.repo());
+      if (!REPO.test(repo)) {
+        this.fail('Informe o repositório no formato dono/repo (ou o link do GitHub).');
+        return;
+      }
     }
     const galeria = [...this.imagensSelecionadas()];
     if (
@@ -360,15 +408,15 @@ export class Submit {
     const mod: Record<string, unknown> = {
       id: modId,
       nome: value('nome'),
-      tipo: value('tipo'),
+      tipo: this.tipo(),
       descricao: value('descricao'),
       versoesDoJogo: versoes,
-      dependencias,
+      dependencias: this.dependencias(),
       pagina: value('pagina') === '' ? null : value('pagina'),
     };
-    if (this.origem() === 'github') {
+    if (origem === 'github') {
       mod['origem'] = 'github';
-      mod['repo'] = this.repo().trim();
+      mod['repo'] = normalizarRepo(this.repo());
       mod['tag'] = this.tagValor().trim();
       mod['arquivo'] = this.arquivoValor().trim();
     } else {
@@ -396,12 +444,14 @@ export class Submit {
       // Novo envio começa sem seleção nem sugestões; na edição a pré-seleção vem do próprio mod.
       if (!this.editing()) {
         this.nome.set('');
+        this.idManual.set(null);
+        this.tipo.set('plugin');
+        this.origem.set('github');
         this.repo.set('');
         this.tagValor.set('');
         this.arquivoValor.set('');
         this.galeriaRepo.set('');
         this.versoesSelecionadas.set(new Set());
-        this.dependenciasEscolhidas.set([]);
         this.imagensSelecionadas.set(new Set());
         this.imagensGaleria.set([]);
         this.tagsGithub.set([]);

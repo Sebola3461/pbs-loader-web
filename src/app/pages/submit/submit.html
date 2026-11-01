@@ -53,7 +53,7 @@
       @if (editing()) {
         A edição entra no catálogo quando a validação aceitar. O id e o dono não mudam.
       } @else {
-        O mod entra no catálogo depois de passar pela validação automática. O id é gerado do nome e o
+        O mod entra no catálogo depois de passar pela validação automática. O id nasce do nome e o
         endereço da página leva o autor: duas pessoas podem ter mods de mesmo id.
       }
     </p>
@@ -80,12 +80,17 @@
               id="id"
               name="id"
               type="text"
-              readonly
+              required
+              maxlength="64"
               spellcheck="false"
-              [value]="editing() ? id() : idAuto()"
-              aria-readonly="true"
+              placeholder="Ex.: PainelDigital"
+              [value]="editing() ? id() : idAtual()"
+              (input)="atualizarId($event)"
             />
-            <p class="form-hint">Gerado automaticamente a partir do nome.</p>
+            <p class="form-hint">
+              Nasce do nome e você pode ajustar: letras, números, "_" ou "-", começando por letra ou
+              número.
+            </p>
           </div>
         </div>
       </fieldset>
@@ -94,7 +99,7 @@
         <legend>Detalhes</legend>
         <div class="campo">
           <label for="tipo">Tipo</label>
-          <select id="tipo" name="tipo" required>
+          <select id="tipo" name="tipo" required (change)="atualizarTipo($event)">
             @for (tipo of tipos; track tipo[0]) {
               <option [value]="tipo[0]" [selected]="tipo[0] === (prefill()?.tipo ?? 'plugin')">
                 {{ tipo[1] }}
@@ -150,128 +155,83 @@
             <p class="form-hint">Separadas por vírgula (o catálogo ainda não conhece as versões).</p>
           }
         </div>
-        <div class="campo">
-          <span class="rotulo" id="rotulo-dependencias">Dependências</span>
-          @if (dependenciasEscolhidas().length) {
-            <ul class="chips" aria-labelledby="rotulo-dependencias">
-              @for (dep of dependenciasEscolhidas(); track dep) {
-                <li class="chip">
-                  {{ dep }}
-                  <button
-                    type="button"
-                    class="chip-remove"
-                    (click)="removerDependencia(dep)"
-                    [attr.aria-label]="'Remover dependência ' + dep"
-                  >
-                    ×
-                  </button>
-                </li>
-              }
-            </ul>
-          }
-          @if (opcoesDependencia().length) {
-            <div class="dep-add">
-              <label class="visually-hidden" for="dep-select">Adicionar dependência</label>
-              <select id="dep-select" #depSelect>
-                <option value="">Escolha um mod…</option>
-                @for (opcao of opcoesDependencia(); track opcao.id) {
-                  <option [value]="opcao.id">{{ opcao.nome }} ({{ opcao.id }})</option>
-                }
-              </select>
-              <button
-                type="button"
-                class="button button-secondary"
-                (click)="adicionarDependencia(depSelect.value); depSelect.value = ''"
-                [disabled]="!depSelect.value"
-              >
-                Adicionar
-              </button>
-            </div>
-          }
-        </div>
       </fieldset>
 
       <fieldset class="secao">
-        <legend>Arquivo</legend>
-        <div class="campo">
-          <span class="rotulo" id="rotulo-origem">Origem do arquivo</span>
-          <div class="check-group" role="radiogroup" aria-labelledby="rotulo-origem">
-            <label class="check">
-              <input
-                type="radio"
-                name="origem"
-                value="github"
-                [checked]="origem() === 'github'"
-                (change)="mudarOrigem($event)"
-              />
-              <span>Release no GitHub</span>
-            </label>
-            <label class="check">
-              <input
-                type="radio"
-                name="origem"
-                value="externa"
-                [checked]="origem() === 'externa'"
-                (change)="mudarOrigem($event)"
-              />
-              <span>Link externo</span>
-            </label>
-          </div>
-        </div>
-
-        @if (origem() === 'github') {
+        <legend>Download</legend>
+        @if (somenteExterna()) {
+          <p class="form-hint">
+            Mods de ônibus e mapas são distribuídos por link externo, sem release no GitHub.
+          </p>
+        } @else {
           <div class="campo">
-            <label for="repo">Repositório (dono/nome)</label>
+            <span class="rotulo" id="rotulo-origem">Origem do arquivo</span>
+            <div class="check-group" role="radiogroup" aria-labelledby="rotulo-origem">
+              <label class="check">
+                <input
+                  type="radio"
+                  name="origem"
+                  value="github"
+                  [checked]="origemEfetiva() === 'github'"
+                  (change)="mudarOrigem($event)"
+                />
+                <span>Release no GitHub</span>
+              </label>
+              <label class="check">
+                <input
+                  type="radio"
+                  name="origem"
+                  value="externa"
+                  [checked]="origemEfetiva() === 'externa'"
+                  (change)="mudarOrigem($event)"
+                />
+                <span>Link externo</span>
+              </label>
+            </div>
+          </div>
+        }
+
+        @if (origemEfetiva() === 'github') {
+          <div class="campo">
+            <label for="repo">Repositório</label>
             <input
               id="repo"
               name="repo"
               type="text"
               required
-              pattern="[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}"
               spellcheck="false"
-              placeholder="Ex.: fulana/painel-digital"
+              placeholder="Sebola3461/FreeWalk ou o link do repo"
               [value]="repo()"
               (input)="atualizarRepo($event)"
             />
-          </div>
-          <div class="campo">
-            <div class="github-fetch">
-              <button
-                type="button"
-                class="button button-secondary"
-                (click)="buscarReleases()"
-                [disabled]="buscandoReleases()"
-              >
-                {{ buscandoReleases() ? 'Buscando…' : 'Buscar releases no GitHub' }}
-              </button>
-              <p class="form-hint">
-                Puxa as tags e os arquivos das releases para escolher sem digitar.
-              </p>
-            </div>
-            @if (avisoReleases()) {
+            <p class="form-hint">
+              Aceita dono/repo ou o link completo do GitHub. As sugestões de tag e arquivo chegam
+              sozinhas.
+            </p>
+            @if (buscandoReleases()) {
+              <p class="form-hint">Buscando releases…</p>
+            } @else if (avisoReleases()) {
               <p class="form-hint">{{ avisoReleases() }}</p>
             }
           </div>
           <div class="campo">
             <label for="tag">Prefixo da tag</label>
-            @if (tagsGithub().length) {
-              <select id="tag-sugestao" #tagSugestao (change)="escolherTag(tagSugestao.value)">
-                <option value="">Escolha uma tag existente…</option>
-                @for (tag of tagsGithub(); track tag) {
-                  <option [value]="tag">{{ tag }}</option>
-                }
-              </select>
-            }
             <input
               id="tag"
               name="tag"
               type="text"
               required
               maxlength="64"
+              list="tag-opcoes"
               placeholder="Ex.: PainelDigital-v"
               [value]="tagValor()"
               (input)="atualizarTag($event)"
             />
+            <datalist id="tag-opcoes">
+              @for (sugestao of sugestoesTag(); track sugestao) {
+                <option [value]="sugestao"></option>
+              }
+            </datalist>
             <p class="form-hint">
               O instalador procura a última release cuja tag começa com isso. Nova versão do mod = nova
               release com esse prefixo.
@@ -279,28 +239,22 @@
           </div>
           <div class="campo">
             <label for="arquivo">Arquivo</label>
-            @if (assetsGithub().length) {
-              <select
-                id="arquivo-sugestao"
-                #arquivoSugestao
-                (change)="escolherArquivo(arquivoSugestao.value)"
-              >
-                <option value="">Escolha o arquivo de uma release…</option>
-                @for (asset of assetsGithub(); track asset) {
-                  <option [value]="asset">{{ asset }}</option>
-                }
-              </select>
-            }
             <input
               id="arquivo"
               name="arquivo"
               type="text"
               required
               maxlength="128"
+              list="arquivo-opcoes"
               placeholder="Ex.: PainelDigital.dll"
               [value]="arquivoValor()"
               (input)="atualizarArquivo($event)"
             />
+            <datalist id="arquivo-opcoes">
+              @for (asset of assetsGithub(); track asset) {
+                <option [value]="asset"></option>
+              }
+            </datalist>
           </div>
         } @else {
           <div class="campo">
@@ -353,7 +307,7 @@
               id="galeria-repo"
               type="text"
               spellcheck="false"
-              placeholder="dono/repo das imagens"
+              placeholder="dono/repo ou o link do repo das imagens"
               [value]="galeriaRepo()"
               (input)="atualizarGaleriaRepo($event)"
             />

@@ -271,6 +271,32 @@ describe('submissões', () => {
     );
   });
 
+  it('ôbus e mapa só saem por link externo: origem github é recusada', async () => {
+    const { db, ana, mods } = await setup();
+    await expectHttpError(
+      recordSubmission(
+        db,
+        ana,
+        body({ mod: validMod({ tipo: 'onibus', origem: 'github', repo: 'ana/onibus', tag: 'Onibus-v', arquivo: 'Onibus.zip' }) }),
+        mods,
+        NOW,
+      ),
+      400,
+      'invalid_payload',
+    );
+    await expectHttpError(
+      recordSubmission(
+        db,
+        ana,
+        body({ mod: validMod({ tipo: 'mapa', origem: 'github' }) }),
+        mods,
+        NOW,
+      ),
+      400,
+      'invalid_payload',
+    );
+  });
+
   it('galeria de imagens do GitHub vai no payload', async () => {
     const { db, ana, mods } = await setup();
     const result = await recordSubmission(
@@ -499,10 +525,21 @@ describe('submissões', () => {
     });
   });
 
-  it('plugin é distribuído como .dll; os outros tipos, como .zip', async () => {
+  it('plugin é distribuído como .dll; skin como .zip; ônibus e mapa só por link externo', async () => {
     const { db, ana, mods } = await setup();
     await expectHttpError(
       recordSubmission(db, ana, body({ mod: validMod({ tipo: 'mapa' }) }), mods, NOW),
+      400,
+      'invalid_payload',
+    );
+    await expectHttpError(
+      recordSubmission(
+        db,
+        ana,
+        body({ mod: validMod({ tipo: 'onibus', arquivo: 'Onibus.zip' }) }),
+        mods,
+        NOW,
+      ),
       400,
       'invalid_payload',
     );
@@ -510,9 +547,9 @@ describe('submissões', () => {
       db,
       ana,
       body({
-        modId: 'MapaZip',
-        idempotencyKey: 'chave-mapa1',
-        mod: validMod({ id: 'MapaZip', tipo: 'mapa', arquivo: 'Mapa.zip' }),
+        modId: 'SkinZip',
+        idempotencyKey: 'chave-skin1',
+        mod: validMod({ id: 'SkinZip', tipo: 'skin', arquivo: 'Skin.zip' }),
       }),
       mods,
       NOW,
@@ -601,7 +638,12 @@ describe('submissões', () => {
         operation: 'edit',
         modId: 'Mapa',
         idempotencyKey: 'chave-edit9',
-        mod: validMod({ id: 'Mapa', tipo: 'mapa', arquivo: 'Mapa.zip' }),
+        mod: validMod({
+          id: 'Mapa',
+          tipo: 'mapa',
+          origem: 'externa',
+          url: 'https://exemplo.com/mapa.zip',
+        }),
       }),
       mods,
       NOW,
