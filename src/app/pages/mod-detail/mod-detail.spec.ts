@@ -46,12 +46,13 @@ describe('ModDetail', () => {
 
     expect(text(el, 'h1')).toBe('Painel Digital');
     expect(el.querySelector('.author a')?.getAttribute('href')).toBe('/autores/gh-fulana');
-    const [download, loader, page] = [...el.querySelectorAll<HTMLAnchorElement>('.actions a')];
-    expect(download.getAttribute('href')).toBe('https://github.com/fulana/painel-digital/releases');
-    expect(download.textContent?.trim()).toBe('Baixar no GitHub');
-    // O deep link abre o instalador com o mod marcado; [attr.href] evita a sanitização de esquema customizado.
+    const [loader, download, page] = [...el.querySelectorAll<HTMLAnchorElement>('.actions a')];
+    // O loader é o caminho recomendado: vem primeiro, como botão principal; o GitHub fica secundário.
     expect(loader.getAttribute('href')).toBe('pbsloader://mod/PainelDigital');
     expect(loader.textContent?.trim()).toBe('Instalar pelo loader');
+    expect(download.getAttribute('href')).toBe('https://github.com/fulana/painel-digital/releases');
+    expect(download.textContent?.trim()).toBe('Baixar no GitHub');
+    expect(download.classList.contains('button-secondary')).toBe(true);
     expect(page.getAttribute('href')).toBe('https://github.com/fulana/painel-digital');
     expect(el.querySelector('img.cover')?.getAttribute('alt')).toBe('Capa de Painel Digital');
     expect(text(el, '.notice h3')).toBe('Instalar pelo PBS Loader');
@@ -65,11 +66,12 @@ describe('ModDetail', () => {
 
   it('link externo avisa e sugere o instalador', async () => {
     const { el } = await render('LinhaCentro', SITE_SLUG, null, externalMod());
-    expect(text(el, '.actions a')).toBe('Abrir link externo');
-    // O loader instala origem externa (zip por https): o deep link aparece para todos os tipos.
-    expect([...el.querySelectorAll<HTMLAnchorElement>('.actions a')].map((a) => a.getAttribute('href'))).toEqual([
-      'https://exemplo.com/linha.zip',
+    const acoes = [...el.querySelectorAll<HTMLAnchorElement>('.actions a')];
+    // O loader é o caminho recomendado (também para origem externa, zip por https); o link direto fica secundário.
+    expect(acoes.map((a) => a.textContent?.trim())).toEqual(['Instalar pelo loader', 'Abrir link externo']);
+    expect(acoes.map((a) => a.getAttribute('href'))).toEqual([
       'pbsloader://mod/LinhaCentro',
+      'https://exemplo.com/linha.zip',
     ]);
     expect(text(el, '.notice-warning h3')).toBe('Arquivo fora do GitHub');
     expect(text(el, '.notice:not(.notice-warning)')).toBeUndefined();
