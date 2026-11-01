@@ -11,7 +11,9 @@ const ROW = {
   userId: 'u-1',
   modId: 'Novo',
   operation: 'publish' as const,
-  payload: '{"id":"Novo"}',
+  // Payload no formato plano do site: o PR grava a forma do schema (origem em objeto, pagina nula fora).
+  payload:
+    '{"id":"Novo","nome":"Mod Novo","tipo":"plugin","autor":"Ana","dono":{"site":"u-1"},"descricao":"Descrição.","versoesDoJogo":["307"],"dependencias":[],"origem":"github","repo":"ana/mod-novo","tag":"Novo-v","arquivo":"Novo.dll","pagina":null,"imagens":["https://raw.githubusercontent.com/ana/mod-novo/main/prints/a.png"]}',
   coverBase64: null,
 };
 
@@ -44,7 +46,18 @@ describe('cliente do GitHub', () => {
     expect(body.sha).toBeUndefined();
     expect(body.branch).toBe('site/Novo');
     expect(body.message).toContain('via site, user: u-1');
-    expect(JSON.parse(Buffer.from(body.content, 'base64').toString('utf8'))).toEqual({ id: 'Novo' });
+    // O arquivo do PR segue o schema do catálogo: origem vira objeto e pagina nula sai do arquivo.
+    expect(JSON.parse(Buffer.from(body.content, 'base64').toString('utf8'))).toEqual({
+      id: 'Novo',
+      nome: 'Mod Novo',
+      tipo: 'plugin',
+      autor: 'Ana',
+      dono: { site: 'u-1' },
+      descricao: 'Descrição.',
+      versoesDoJogo: ['307'],
+      origem: { github: { repo: 'ana/mod-novo', tag: 'Novo-v', arquivo: 'Novo.dll' } },
+      imagens: ['https://raw.githubusercontent.com/ana/mod-novo/main/prints/a.png'],
+    });
   });
 
   it('PR aberto para o mesmo mod dá conflito, sem criar branch', async () => {

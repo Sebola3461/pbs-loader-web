@@ -168,6 +168,38 @@ async function openPullRequest(
   return pull.number;
 }
 
+/**
+ * O payload guardado usa a forma plana do site (origem: 'github' com repo/tag/arquivo na raiz, pagina nula);
+ * o arquivo que o PR grava segue o schema do catálogo: origem vira objeto, pagina nula sai do arquivo e
+ * dependências/imagens só entram quando existem. O agregado do catálogo desmonta de volta para a forma plana.
+ */
+function conteudoDoCatalogo(payload: string): string {
+  const mod = JSON.parse(payload) as Record<string, unknown>;
+  const github = mod['origem'] === 'github' ? mod : null;
+  const externa = mod['origem'] === 'externa' ? mod : null;
+  if (!github && !externa) throw new HttpError(400, 'invalid_payload');
+  const origem = github
+    ? { github: { repo: github['repo'], tag: github['tag'], arquivo: github['arquivo'] } }
+    : { externa: { url: (externa as Record<string, unknown>)['url'] } };
+  const dependencias = mod['dependencias'];
+  const imagens = mod['imagens'];
+  const pagina = mod['pagina'];
+  const saida: Record<string, unknown> = {
+    id: mod['id'],
+    nome: mod['nome'],
+    tipo: mod['tipo'],
+    autor: mod['autor'],
+    dono: mod['dono'],
+    descricao: mod['descricao'],
+    versoesDoJogo: mod['versoesDoJogo'],
+    ...(Array.isArray(dependencias) && dependencias.length ? { dependencias } : {}),
+    origem,
+    ...(typeof pagina === 'string' && pagina !== '' ? { pagina } : {}),
+    ...(Array.isArray(imagens) && imagens.length ? { imagens } : {}),
+  };
+  return JSON.stringify(saida, null, 2) + '\n';
+}
+
 /** Conteúdo que o PR grava para cada operação; null só em remove, que apaga o arquivo. */
 async function contentFor(
   token: string,
@@ -188,7 +220,7 @@ async function contentFor(
     return { content: JSON.stringify(mod, null, 2) + '\n', existing };
   }
   if (!row.payload) throw new HttpError(400, 'invalid_payload');
-  return { content: row.payload, existing };
+  return { content: conteudoDoCatalogo(row.payload), existing };
 }
 
 /**

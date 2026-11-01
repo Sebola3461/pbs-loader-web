@@ -342,6 +342,18 @@ describe('submissões', () => {
     );
   });
 
+  it('nome e descrição nos limites do schema do catálogo (80 e 2000) passam', async () => {
+    const { db, ana, mods } = await setup();
+    const result = await recordSubmission(
+      db,
+      ana,
+      body({ mod: validMod({ nome: 'N'.repeat(80), descricao: 'd'.repeat(2000) }) }),
+      mods,
+      NOW,
+    );
+    expect(result.response.status).toBe(201);
+  });
+
   it('galeria de imagens do GitHub vai no payload', async () => {
     const { db, ana, mods } = await setup();
     const result = await recordSubmission(
