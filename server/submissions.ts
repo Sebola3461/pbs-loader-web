@@ -141,6 +141,20 @@ function lerImagens(body: unknown): string[] {
 }
 
 /**
+ * O id do mod nasce no servidor, derivado do nome: sem acentos, minúsculo, separado por traços.
+ * O formulário nem mostra o campo — o cliente não decide o id, só o nome.
+ */
+function slugifyId(nome: string): string {
+  return nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+}
+
+/**
  * Monta o JSON canônico do mod a partir do que o cliente mandou. Dono vira a conta logada (site), autor vira o
  * username. O schema do catálogo é additionalProperties: false e NÃO tem capa, confiável nem datas: esses campos
  * pertencem ao agregado (a capa vem do arquivo covers/<id>.webp no PR, o confiável vem dos autores confiáveis e
@@ -151,10 +165,12 @@ function modPayloadFrom(
   user: User,
   modId: string,
   imagens: string[],
+  idNoPayload: boolean,
 ): Record<string, unknown> {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) invalidPayload();
   const mod = raw as Record<string, unknown>;
-  const id = str(mod.id, 2, 64);
+  // Na edição o id vem do corpo e tem de bater com o da rota; no publish o servidor gera o id.
+  const id = idNoPayload ? str(mod.id, 2, 64) : modId;
   if (id !== modId || !MOD_ID.test(id)) invalidPayload();
   const tipo = mod.tipo;
   if (typeof tipo !== 'string' || !MOD_TYPES.includes(tipo as ModType)) invalidPayload();
@@ -183,7 +199,7 @@ function modPayloadFrom(
 }
 
 /** Valida o corpo do envio e devolve o que o resto do fluxo usa; qualquer desvio vira 400 estável. */
-function readSubmission(body: unknown, user: User, modId: string): SubmissionInput {
+function readSubmission(body: unknown, user: User, modId: string | null): SubmissionInput {
   const operation = field(body, 'operation');
   if (typeof operation !== 'string' || !OPERATIONS.includes(operation as Operation)) {
     throw new HttpError(400, 'invalid_operation');
@@ -192,13 +208,27 @@ function readSubmission(body: unknown, user: User, modId: string): SubmissionInp
   if (typeof key !== 'string' || key.length < 8 || key.length > 64) {
     throw new HttpError(400, 'invalid_idempotency_key');
   }
+  // Publish gera o id no servidor; as outras operações identificam o mod pelo corpo.
+  if (operation !== 'publish' && !modId) throw new HttpError(400, 'invalid_mod_id');
   const cover = capaValida(field(body, 'capaBase64'));
   const imagens = lerImagens(body);
   const withPayload = operation === 'publish' || operation === 'edit';
-  const payloadText = withPayload
-    ? JSON.stringify(modPayloadFrom(field(body, 'mod'), user, modId, imagens))
-    : null;
-  return { operation: operation as Operation, modId, key, payloadText, cover };
+  if (withPayload) {
+    const mod = field(body, 'mod');
+    const finalId =
+      operation === 'publish'
+        ? slugifyId(str(field(mod, 'nome'), 1, 80))
+        : (modId as string);
+    if (operation === 'publish' && !MOD_ID.test(finalId)) invalidPayload();
+    return {
+      operation: operation as Operation,
+      modId: finalId,
+      key,
+      payloadText: JSON.stringify(modPayloadFrom(mod, user, finalId, imagens, operation === 'edit')),
+      cover,
+    };
+  }
+  return { operation: operation as Operation, modId: modId as string, key, payloadText: null, cover };
 }
 
 async function findReplayRow(db: Database, userId: string, key: string): Promise<SubmissionRow | null> {
@@ -338,9 +368,12 @@ export async function recordSubmission(
   now: Date,
   publish?: Publisher,
 ): Promise<RouteResult> {
-  const modId = field(body, 'modId');
-  if (typeof modId !== 'string' || !MOD_ID.test(modId)) throw new HttpError(400, 'invalid_mod_id');
-  const input = readSubmission(body, user, modId);
+  // Id presente tem de ser válido; ausente no publish é o esperado — o servidor gera do nome.
+  const bruto = field(body, 'modId');
+  if (bruto !== undefined && bruto !== null && (typeof bruto !== 'string' || !MOD_ID.test(bruto))) {
+    throw new HttpError(400, 'invalid_mod_id');
+  }
+  const input = readSubmission(body, user, typeof bruto === 'string' && bruto !== '' ? bruto : null);
   const existing = await findReplayRow(db, user.id, input.key);
   if (existing) {
     ensureSameIntent(existing, input);

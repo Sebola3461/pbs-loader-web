@@ -134,11 +134,11 @@ describe('Submit', () => {
     expect(el.querySelector('form')).toBeNull();
   });
 
-  it('logado mostra o formulário: id editável, versões em select, sem dependências', async () => {
+  it('logado mostra o formulário: id gerado no servidor, versões em select, sem dependências', async () => {
     const { el } = await setup(ANA);
     expect(el.querySelectorAll('#tipo option')).toHaveLength(7);
-    const id = el.querySelector('#id') as HTMLInputElement;
-    expect(id.readOnly).toBe(false);
+    // O id nasce no servidor: o campo nem aparece na tela.
+    expect(el.querySelector('#id')).toBeNull();
     expect(el.querySelector('#versao-jogo')!.hasAttribute('multiple')).toBe(true);
     expect(el.textContent).not.toContain('Dependências');
     expect(el.querySelector('#repo')).not.toBeNull();
@@ -147,27 +147,13 @@ describe('Submit', () => {
     expect(el.querySelector('#galeria-repo')).not.toBeNull();
   });
 
-  it('id acompanha o nome, aceita ajuste manual e volta ao automático se esvaziado', async () => {
-    const { fixture, el } = await setup(ANA);
-    fill(el, { nome: 'Modão Brabo 2' });
-    fixture.detectChanges();
-    expect((el.querySelector('#id') as HTMLInputElement).value).toBe('modao-brabo-2');
-    fill(el, { id: 'Meu_Mod-1' });
-    fill(el, { nome: 'Outro Nome' });
-    fixture.detectChanges();
-    expect((el.querySelector('#id') as HTMLInputElement).value).toBe('Meu_Mod-1');
-    fill(el, { id: '  ' });
-    fixture.detectChanges();
-    expect((el.querySelector('#id') as HTMLInputElement).value).toBe('outro-nome');
-  });
-
-  it('id fora do formato falha no cliente, sem chamada à API', async () => {
+  it('nome vazio falha no cliente, sem chamada à API', async () => {
     const { fixture, el, http } = await setup(ANA);
-    fill(el, { ...FORM_DEFAULTS, id: 'a' });
+    fill(el, { descricao: 'Descrição.', repo: 'ana/mod-novo', tag: 'Novo-v', arquivo: 'Novo.dll' });
     marcarVersoes(el, ['307']);
     submitForm(el);
     fixture.detectChanges();
-    expect(text(el, '.form-error')).toContain('O id aceita letras');
+    expect(text(el, '.form-error')).toBe('Escreva o nome do mod.');
     http.expectNone('/api/submissions');
   });
 
@@ -180,10 +166,10 @@ describe('Submit', () => {
     expect(req.request.method).toBe('POST');
     const body = req.request.body as Record<string, unknown>;
     expect(body['operation']).toBe('publish');
-    expect(body['modId']).toBe('mod-novo');
+    // O id nasce no servidor: o publish não manda modId nem id no payload.
+    expect(body['modId']).toBeUndefined();
     expect(body['idempotencyKey']).toMatch(/^[0-9a-f-]{36}$/);
     expect(body['mod']).toMatchObject({
-      id: 'mod-novo',
       nome: 'Mod Novo',
       tipo: 'plugin',
       versoesDoJogo: ['307'],
@@ -193,10 +179,12 @@ describe('Submit', () => {
       tag: 'Novo-v',
       arquivo: 'Novo.dll',
     });
-    req.flush({ submission: { id: 's1', modId: 'mod-novo', status: 'pending', prNumber: 12 } });
+    req.flush({
+      submission: { id: 's1', modId: 'id-gerado-pelo-servidor', status: 'pending', prNumber: 12 },
+    });
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(text(el, '.panel p')).toContain('mod-novo foi enviado para publicação');
+    expect(text(el, '.panel p')).toContain('id-gerado-pelo-servidor foi enviado para publicação');
     expect(el.querySelector('.panel .form-hint a')?.getAttribute('href')).toContain('/pull/12');
   });
 
@@ -433,7 +421,8 @@ describe('Submit', () => {
       githubMod({ dono: { site: ANA.id }, imagens }),
     );
     expect((el.querySelector('#nome') as HTMLInputElement).value).toBe('Painel Digital');
-    expect((el.querySelector('#id') as HTMLInputElement).value).toBe('PainelDigital');
+    // Sem campo de id na tela: a edição manda o id da rota no payload.
+    expect(el.querySelector('#id')).toBeNull();
     expect((el.querySelector('#repo') as HTMLInputElement).value).toBe('fulana/painel-digital');
     expect((el.querySelector('#galeria-repo') as HTMLInputElement).value).toBe(
       'fulana/painel-digital',
@@ -450,6 +439,7 @@ describe('Submit', () => {
     expect((body['mod'] as Record<string, unknown>)['descricao']).toBe('Descrição nova.');
     expect((body['mod'] as Record<string, unknown>)['versoesDoJogo']).toEqual(['307']);
     expect((body['mod'] as Record<string, unknown>)['repo']).toBe('fulana/painel-digital');
+    expect((body['mod'] as Record<string, unknown>)['id']).toBe('PainelDigital');
     expect((body['mod'] as Record<string, unknown>)['dependencias']).toEqual([
       'PBSLoaderCommonUtils',
     ]);
@@ -529,7 +519,7 @@ describe('Submit', () => {
     fixture.detectChanges();
     expect(el.querySelector('form')).not.toBeNull();
     expect((el.querySelector('#nome') as HTMLInputElement).value).toBe('');
-    expect((el.querySelector('#id') as HTMLInputElement).value).toBe('');
+    expect(el.querySelector('#id')).toBeNull();
     expect(
       [...(el.querySelector('#versao-jogo') as HTMLSelectElement).options].some((o) => o.selected),
     ).toBe(false);

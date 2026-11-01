@@ -53,45 +53,24 @@
       @if (editing()) {
         A edição entra no catálogo quando a validação aceitar. O id e o dono não mudam.
       } @else {
-        O mod entra no catálogo depois de passar pela validação automática. O id nasce do nome e o
-        endereço da página leva o autor: duas pessoas podem ter mods de mesmo id.
+        O mod entra no catálogo depois de passar pela validação automática. O site gera o id
+        automaticamente e o endereço da página leva o autor: duas pessoas podem ter mods de mesmo id.
       }
     </p>
     <form class="form" (submit)="submit($event)">
       <fieldset class="secao">
         <legend>Identificação</legend>
-        <div class="duo">
-          <div class="campo">
-            <label for="nome">Nome</label>
-            <input
-              id="nome"
-              name="nome"
-              type="text"
-              required
-              maxlength="80"
-              placeholder="Ex.: Painel Digital"
-              [value]="prefill()?.nome ?? ''"
-              (input)="atualizarNome($event)"
-            />
-          </div>
-          <div class="campo">
-            <label for="id">Id do mod</label>
-            <input
-              id="id"
-              name="id"
-              type="text"
-              required
-              maxlength="64"
-              spellcheck="false"
-              placeholder="Ex.: PainelDigital"
-              [value]="editing() ? id() : idAtual()"
-              (input)="atualizarId($event)"
-            />
-            <p class="form-hint">
-              Nasce do nome e você pode ajustar: letras, números, "_" ou "-", começando por letra ou
-              número.
-            </p>
-          </div>
+        <div class="campo">
+          <label for="nome">Nome</label>
+          <input
+            id="nome"
+            name="nome"
+            type="text"
+            required
+            maxlength="80"
+            placeholder="Ex.: Painel Digital"
+            [value]="prefill()?.nome ?? ''"
+          />
         </div>
       </fieldset>
 

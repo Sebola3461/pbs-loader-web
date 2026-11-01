@@ -39,8 +39,6 @@ interface GithubTree {
 /** Extensões aceitas como imagem de galeria. */
 const IMAGEM_EXT = /\.(png|jpe?g|webp|gif|avif)$/i;
 const MAX_IMAGENS = 10;
-/** Mesma regra do servidor para o id técnico do mod. */
-const MOD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/;
 /** Mesma regra do servidor para dono/repo. */
 const REPO = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/;
 /** Tipos que o catálogo distribui só por link externo. */
@@ -63,20 +61,6 @@ export function normalizarRepo(valor: string): string {
 }
 
 /**
- * Converte o nome do mod no id técnico: sem acentos, minúsculo, separado por traços.
- * O id nasce automaticamente — mas o autor ainda pode ajustá-lo à mão.
- */
-export function slugifyId(nome: string): string {
-  return nome
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64);
-}
-
-/**
  * Deriva o prefixo de tag do nome de uma tag existente: FreeWalk-v1.0 → FreeWalk-v.
  * Mantém o "v" porque é o padrão usado pelos mods do catálogo; tags sem versão ficam como estão.
  */
@@ -85,9 +69,9 @@ export function prefixoDeTag(tag: string): string {
 }
 
 /**
- * Formulário de envio — e de edição/remoção, quando a rota traz autor e id. Id acompanha o nome
- * (com ajuste manual possível); versões vêm do catálogo; releases e imagens chegam da API pública
- * do GitHub assim que o repositório é informado. A chave de idempotência nasce quando o formulário
+ * Formulário de envio — e de edição/remoção, quando a rota traz autor e id. O id do mod nasce no
+ * servidor, derivado do nome (o formulário nem mostra o campo); versões, releases e imagens vêm de
+ * listas — do catálogo e da API pública do GitHub. A chave de idempotência nasce quando o formulário
  * abre e só troca depois de um envio aceito.
  */
 @Component({
@@ -146,11 +130,6 @@ export class Submit {
   protected readonly versoesSelecionadas = signal<Set<string>>(new Set());
 
   // Campos guiados por signal: o mesmo valor alimenta o envio e as sugestões do GitHub.
-  protected readonly nome = signal('');
-  protected readonly idManual = signal<string | null>(null);
-  protected readonly idAuto = computed(() => slugifyId(this.nome()));
-  /** Enquanto o autor não editar o id à mão, ele acompanha o nome. */
-  protected readonly idAtual = computed(() => this.idManual() ?? this.idAuto());
   protected readonly tipo = signal('plugin');
   /** Ônibus e mapa não têm arquivo nem release: só link externo de download. */
   protected readonly somenteExterna = computed(() => SO_EXTERNA.has(this.tipo()));
@@ -216,16 +195,6 @@ export class Submit {
   protected alternarVersoes(event: Event): void {
     const select = event.target as HTMLSelectElement;
     this.versoesSelecionadas.set(new Set([...select.selectedOptions].map((o) => o.value)));
-  }
-
-  protected atualizarNome(event: Event): void {
-    this.nome.set((event.target as HTMLInputElement).value);
-  }
-
-  /** Id editável: deixa de acompanhar o nome na primeira alteração (campo vazio volta ao automático). */
-  protected atualizarId(event: Event): void {
-    const valor = (event.target as HTMLInputElement).value;
-    this.idManual.set(valor.trim() === '' ? null : valor);
   }
 
   protected atualizarTipo(event: Event): void {
@@ -364,13 +333,9 @@ export class Submit {
     const form = event.target as HTMLFormElement;
     const value = (name: string) => (form.elements.namedItem(name) as HTMLInputElement).value.trim();
 
-    const modId = this.editing() ? this.id()! : this.idAtual();
-    if (!modId) {
-      this.fail('Escreva o nome do mod: o id é gerado a partir dele.');
-      return;
-    }
-    if (!MOD_ID.test(modId)) {
-      this.fail('O id aceita letras, números, "_" ou "-", começando por letra ou número.');
+    // O id nasce no servidor a partir do nome; o formulário nem mostra o campo.
+    if (!value('nome')) {
+      this.fail('Escreva o nome do mod.');
       return;
     }
 
@@ -406,7 +371,6 @@ export class Submit {
       return;
     }
     const mod: Record<string, unknown> = {
-      id: modId,
       nome: value('nome'),
       tipo: this.tipo(),
       descricao: value('descricao'),
@@ -414,6 +378,8 @@ export class Submit {
       dependencias: this.dependencias(),
       pagina: value('pagina') === '' ? null : value('pagina'),
     };
+    // Na edição o id é fixo e volta no payload; no publish o servidor gera o id do nome.
+    if (this.editing()) mod['id'] = this.id();
     if (origem === 'github') {
       mod['origem'] = 'github';
       mod['repo'] = normalizarRepo(this.repo());
@@ -430,7 +396,8 @@ export class Submit {
       const result = await firstValueFrom(
         this.http.post<SubmissionResult>('/api/submissions', {
           operation: this.editing() ? 'edit' : 'publish',
-          modId,
+          // Publish não manda id: o servidor gera do nome e devolve o id na resposta.
+          ...(this.editing() ? { modId: this.id() } : {}),
           idempotencyKey: this.idempotencyKey,
           mod,
           capaBase64: this.capa()?.base64 ?? null,
@@ -443,8 +410,6 @@ export class Submit {
       this.capa.set(null);
       // Novo envio começa sem seleção nem sugestões; na edição a pré-seleção vem do próprio mod.
       if (!this.editing()) {
-        this.nome.set('');
-        this.idManual.set(null);
         this.tipo.set('plugin');
         this.origem.set('github');
         this.repo.set('');

@@ -54,17 +54,6 @@
   font-size: 0.875rem;
 }
 
-.duo {
-  display: grid;
-  gap: var(--space-4);
-}
-
-@media (min-width: 40rem) {
-  .duo {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  }
-}
-
 /* Checkbox e rádio em pílulas: alvo grande, estado óbvio. */
 .check-group {
   display: flex;

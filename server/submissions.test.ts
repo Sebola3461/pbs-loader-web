@@ -42,9 +42,6 @@ const body = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const publish = (modId: string, n: number) =>
-  body({ modId, idempotencyKey: `chave-${String(n).padStart(4, '0')}`, mod: validMod({ id: modId }) });
-
 /** WebP de mentira: só a assinatura RIFF....WEBP que a validação confere. */
 const FAKE_WEBP = (() => {
   const bytes = new Uint8Array(32);
@@ -105,10 +102,10 @@ describe('submissões', () => {
     const row = db.raw
       .prepare('SELECT mod_id, operation, status, payload FROM submissions')
       .get() as { mod_id: string; operation: string; status: string; payload: string };
-    expect(row).toMatchObject({ mod_id: 'Novo', operation: 'publish', status: 'pending' });
+    expect(row).toMatchObject({ mod_id: 'mod-novo', operation: 'publish', status: 'pending' });
     const payload = JSON.parse(row.payload);
     expect(payload).toMatchObject({
-      id: 'Novo',
+      id: 'mod-novo',
       autor: 'Ana',
       dono: { site: ana.id },
       dependencias: ['Painel'],
@@ -121,13 +118,49 @@ describe('submissões', () => {
     expect(payload).not.toHaveProperty('atualizadoEm');
   });
 
-  it('recusa publicar id que já existe no catálogo', async () => {
+  it('recusa publicar id que já existe no catálogo; o id nasce do nome no servidor', async () => {
     const { db, ana, mods } = await setup();
+    // O id nasce do nome ('Mod Novo' → 'mod-novo'): o conflito é com o id gerado, não com o enviado.
+    const comNovo = new Map(mods);
+    comNovo.set('mod-novo', { id: 'mod-novo', dono: { github: 'fulana' }, capa: null });
     await expectHttpError(
-      recordSubmission(db, ana, body({ modId: 'Painel', mod: validMod({ id: 'Painel' }) }), mods, NOW),
+      recordSubmission(db, ana, body({ mod: validMod() }), comNovo, NOW),
       409,
       'mod_exists',
     );
+    // O modId do corpo é ignorado no publish: 'Painel' existe, mas o id gerado não colide.
+    const result = await recordSubmission(
+      db,
+      ana,
+      body({ modId: 'Painel', mod: validMod({ id: 'Painel' }), idempotencyKey: 'chave-ign1' }),
+      mods,
+      NOW,
+    );
+    expect(result.response.status).toBe(201);
+    const row = db.raw.prepare('SELECT mod_id, payload FROM submissions').get() as {
+      mod_id: string;
+      payload: string;
+    };
+    expect(row.mod_id).toBe('mod-novo');
+    expect(JSON.parse(row.payload).id).toBe('mod-novo');
+  });
+
+  it('publish gera o id do nome: acentos e espaços viram o id técnico', async () => {
+    const { db, ana, mods } = await setup();
+    const result = await recordSubmission(
+      db,
+      ana,
+      body({ mod: validMod({ nome: 'Painel Digital do João II' }), idempotencyKey: 'chave-slug1' }),
+      mods,
+      NOW,
+    );
+    expect(result.response.status).toBe(201);
+    const row = db.raw.prepare('SELECT mod_id, payload FROM submissions').get() as {
+      mod_id: string;
+      payload: string;
+    };
+    expect(row.mod_id).toBe('painel-digital-do-joao-ii');
+    expect(JSON.parse(row.payload).id).toBe('painel-digital-do-joao-ii');
   });
 
   it('editar e remover exigem ser o dono; id de GitHub não pertence a ninguém do site', async () => {
@@ -183,16 +216,27 @@ describe('submissões', () => {
   it('limite de 5 envios em 24 horas; fora da janela a conta recomeça', async () => {
     const { db, ana, mods } = await setup();
     for (let n = 1; n <= 5; n++) {
-      expect((await recordSubmission(db, ana, publish(`Mod${n}`, n), mods, NOW)).response.status).toBe(201);
+      expect(
+        (await recordSubmission(db, ana, body({ idempotencyKey: `chave-000${n}` }), mods, NOW))
+          .response.status,
+      ).toBe(201);
     }
-    await expectHttpError(recordSubmission(db, ana, publish('Mod6', 6), mods, NOW), 429, 'submission_limit');
+    await expectHttpError(
+      recordSubmission(db, ana, body({ idempotencyKey: 'chave-0006' }), mods, NOW),
+      429,
+      'submission_limit',
+    );
+    // Fora da janela de 24h a conta recomeça: todos os envios envelhecem de uma vez.
     db.raw
-      .prepare('UPDATE submissions SET created_at = ? WHERE mod_id = ?')
-      .run(new Date(NOW.getTime() - 25 * 60 * 60 * 1000).toISOString(), 'Mod1');
-    expect((await recordSubmission(db, ana, publish('Mod6', 6), mods, NOW)).response.status).toBe(201);
+      .prepare('UPDATE submissions SET created_at = ?')
+      .run(new Date(NOW.getTime() - 25 * 60 * 60 * 1000).toISOString());
+    expect(
+      (await recordSubmission(db, ana, body({ idempotencyKey: 'chave-0007' }), mods, NOW))
+        .response.status,
+    ).toBe(201);
   });
 
-  it('recusa payload inválido: tipo desconhecido, origem sem campos, id divergente, url insegura', async () => {
+  it('recusa payload inválido: tipo desconhecido, origem sem campos, id inválido, url insegura', async () => {
     const { db, ana, mods } = await setup();
     await expectHttpError(
       recordSubmission(db, ana, body({ mod: validMod({ tipo: 'naves' }) }), mods, NOW),
@@ -215,8 +259,9 @@ describe('submissões', () => {
       400,
       'invalid_payload',
     );
+    // O id nasce do nome: um nome que gera id curto demais falha no payload.
     await expectHttpError(
-      recordSubmission(db, ana, body({ modId: 'Outro', mod: validMod() }), mods, NOW),
+      recordSubmission(db, ana, body({ mod: validMod({ nome: 'A' }) }), mods, NOW),
       400,
       'invalid_payload',
     );
@@ -318,9 +363,8 @@ describe('submissões', () => {
       db,
       ana,
       body({
-        modId: 'Externo',
         idempotencyKey: 'chave-ext1',
-        mod: validMod({ id: 'Externo', origem: 'externa', url: 'https://exemplo.com/mod.zip' }),
+        mod: validMod({ origem: 'externa', url: 'https://exemplo.com/mod.zip' }),
       }),
       mods,
       NOW,
@@ -363,7 +407,7 @@ describe('submissões', () => {
     expect(db.raw.prepare('SELECT COUNT(*) AS n FROM submissions').get()).toEqual({ n: 1 });
 
     // Fase 2: o gêmeo gravou a mesma chave com outro payload; o reenvio vira conflito em vez de segunda linha.
-    db.raw.prepare(`UPDATE submissions SET payload = '{"id":"Novo"}' WHERE mod_id = 'Novo'`).run();
+    db.raw.prepare(`UPDATE submissions SET payload = '{"id":"outro"}' WHERE mod_id = 'mod-novo'`).run();
     await expectHttpError(
       recordSubmission(maskOnce(db), ana, body(), mods, NOW),
       409,
@@ -428,15 +472,15 @@ describe('submissões', () => {
     };
     const githubHappy = {
       [REPO_API]: () => new Response(JSON.stringify({ default_branch: 'main' })),
-      [pullsUrl('Novo')]: () => new Response('[]'),
+      [pullsUrl('mod-novo')]: () => new Response('[]'),
       [`${REPO_API}/git/ref/heads/main`]: () =>
         new Response(JSON.stringify({ object: { sha: 'sha-base' } })),
       [`${REPO_API}/git/refs`]: () => new Response('{}', { status: 201 }),
-      [contentsUrl('Novo')]: (request: Request) =>
+      [contentsUrl('mod-novo')]: (request: Request) =>
         request.method === 'PUT'
           ? new Response('{}', { status: 201 })
           : new Response('{"message":"Not Found"}', { status: 404 }),
-      [`${REPO_API}/contents/mods/Novo.json`]: (request: Request) =>
+      [`${REPO_API}/contents/mods/mod-novo.json`]: (request: Request) =>
         request.method === 'PUT'
           ? new Response('{}', { status: 201 })
           : new Response('{"message":"Not Found"}', { status: 404 }),
@@ -452,7 +496,7 @@ describe('submissões', () => {
     const result = (await ok.response.json()) as { submission: { prNumber: number } };
     expect(result.submission.prNumber).toBe(12);
     expect(
-      db.raw.prepare('SELECT status, pr_number FROM submissions WHERE mod_id = ?').get('Novo'),
+      db.raw.prepare('SELECT status, pr_number FROM submissions WHERE mod_id = ?').get('mod-novo'),
     ).toEqual({ status: 'pending', pr_number: 12 });
 
     // Catálogo fora do ar: falha fechado antes de tocar o GitHub.
