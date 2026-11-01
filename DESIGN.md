@@ -176,6 +176,33 @@ Russo One só existe no peso 400 — nunca fingir peso com stroke. Chakra Petch 
 | Hover BG | #191E28 |
 | Accent | #FFB020 |
 
+Uso: só rádio (origem do arquivo) e seleção de imagens da galeria. Versões do jogo usam `select[multiple]` (min-height 9rem, altura auto).
+
+### Select múltiplo de versões
+| Property | Value |
+|----------|-------|
+| Base | igual ao input/select global |
+| Height | auto, min-height 9rem (lista aberta) |
+| Selected | accent #FFB020; dica "Ctrl (ou Cmd) para várias" |
+| Fallback | sem versões no catálogo, input manual numérico |
+
+### Busca no GitHub (github-fetch)
+| Property | Value |
+|----------|-------|
+| Layout | input flex + botão secundário na mesma linha |
+| Endpoints | `api.github.com` público: releases (tag/arquivo) e git trees (galeria) |
+| Estados | botão "Buscando…" enquanto carrega; avisos em form-hint; falha em form-error |
+| CSP | `connect-src` inclui `https://api.github.com` |
+
+### Grade de imagens da galeria (galeria-pick)
+| Property | Value |
+|----------|-------|
+| Layout | grid auto-fill minmax(9rem, 1fr) |
+| Item | fundo #12151D, borda #262C3A, raio 0.375rem; selecionado: primary-soft + borda #FFB020 |
+| Miniatura | aspect-ratio 16/9, object-fit cover, lazy |
+| Nome do arquivo | 0.75rem, ellipsis em uma linha |
+| Limite | 10 imagens por mod |
+
 ### Chips de dependência
 | Property | Value |
 |----------|-------|

@@ -22,10 +22,49 @@ interface SubmissionResult {
   submission: { id: string; modId: string; status: string; prNumber: number | null };
 }
 
+interface GithubRelease {
+  tag_name: string;
+  assets: Array<{ name: string }>;
+}
+
+interface GithubRepo {
+  default_branch: string;
+}
+
+interface GithubTree {
+  tree: Array<{ path: string; type: string }>;
+}
+
+/** Extensões aceitas como imagem de galeria. */
+const IMAGEM_EXT = /\.(png|jpe?g|webp|gif|avif)$/i;
+const MAX_IMAGENS = 10;
+
 /**
- * Formulário de envio — e de edição/remoção, quando a rota traz autor e id. Versões e dependências são
- * selecionadas de listas do catálogo (nada digitado à mão); a chave de idempotência nasce quando o formulário
- * abre e só troca depois de um envio aceito.
+ * Converte o nome do mod no id técnico: sem acentos, minúsculo, separado por traços.
+ * O id é gerado automaticamente — o autor não precisa conhecer a regra de formato.
+ */
+export function slugifyId(nome: string): string {
+  return nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+}
+
+/**
+ * Deriva o prefixo de tag do nome de uma tag existente: PainelDigital-v1.2 → PainelDigital-v.
+ * Mantém o "v" porque é o padrão usado pelos mods do catálogo; tags sem versão ficam como estão.
+ */
+export function prefixoDeTag(tag: string): string {
+  return tag.replace(/[\d.]+$/, '').replace(/[-_. ]+$/, '') || tag;
+}
+
+/**
+ * Formulário de envio — e de edição/remoção, quando a rota traz autor e id. Id nasce do nome; versões,
+ * dependências, tag, arquivo e imagens da galeria vêm de listas: do catálogo e da API pública do GitHub.
+ * A chave de idempotência nasce quando o formulário abre e só troca depois de um envio aceito.
  */
 @Component({
   selector: 'app-submit',
@@ -59,11 +98,7 @@ export class Submit {
       tipo: mod.tipo,
       descricao: mod.descricao,
       versoes: mod.versoesDoJogo.join(', '),
-      galeria: mod.imagens?.join('\n') ?? '',
       pagina: mod.pagina ?? '',
-      repo: github ? github.repo : '',
-      tag: github ? github.tag : '',
-      arquivo: github ? github.arquivo : '',
       url: externa ? externa.url : '',
     };
   });
@@ -87,18 +122,47 @@ export class Submit {
   protected readonly removing = signal(false);
   protected readonly versoesSelecionadas = signal<Set<string>>(new Set());
   protected readonly dependenciasEscolhidas = signal<string[]>([]);
+
+  // Campos guiados por signal: o mesmo valor alimenta o envio e as escolhas do GitHub.
+  protected readonly nome = signal('');
+  protected readonly idAuto = computed(() => slugifyId(this.nome()));
+  protected readonly repo = signal('');
+  protected readonly tagValor = signal('');
+  protected readonly arquivoValor = signal('');
+  protected readonly galeriaRepo = signal('');
+
+  // Releases do repositório: sugestões de prefixo de tag e de arquivo do mod.
+  protected readonly tagsGithub = signal<string[]>([]);
+  protected readonly assetsGithub = signal<string[]>([]);
+  protected readonly buscandoReleases = signal(false);
+  protected readonly avisoReleases = signal<string | null>(null);
+
+  // Galeria: imagens listadas da árvore do repositório, escolhidas pelo autor.
+  protected readonly imagensGaleria = signal<Array<{ url: string; label: string }>>([]);
+  protected readonly buscandoImagens = signal(false);
+  protected readonly avisoImagens = signal<string | null>(null);
+  protected readonly imagensSelecionadas = signal<Set<string>>(new Set());
+
   private readonly preenchido = signal(false);
   private readonly erro = viewChild<ElementRef<HTMLElement>>('erro');
   private readonly removeDialog = viewChild.required<ElementRef<HTMLDialogElement>>('removeDialog');
   private idempotencyKey = crypto.randomUUID();
 
   constructor() {
-    // Na edição, as versões e dependências atuais do mod partem pré-marcadas.
+    // Na edição, as seleções partem do estado atual do mod (a pré-preencher roda uma vez).
     effect(() => {
       const mod = this.original();
       if (this.editing() && mod && !this.preenchido()) {
         this.versoesSelecionadas.set(new Set(mod.versoesDoJogo));
         this.dependenciasEscolhidas.set([...mod.dependencias]);
+        this.imagensSelecionadas.set(new Set(mod.imagens ?? []));
+        const github = mod.origem === 'github' ? mod : null;
+        if (github) {
+          this.repo.set(github.repo);
+          this.tagValor.set(github.tag);
+          this.arquivoValor.set(github.arquivo);
+          this.galeriaRepo.set(github.repo);
+        }
         this.preenchido.set(true);
       }
     });
@@ -108,14 +172,41 @@ export class Submit {
     return this.versoesSelecionadas().has(versao);
   }
 
-  protected alternarVersao(versao: string, event: Event): void {
-    const marcado = (event.target as HTMLInputElement).checked;
-    this.versoesSelecionadas.update((marcadas) => {
-      const atual = new Set(marcadas);
-      if (marcado) atual.add(versao);
-      else atual.delete(versao);
-      return atual;
-    });
+  /** O select múltiplo é a única fonte: o evento change traz tudo que está marcado. */
+  protected alternarVersoes(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    this.versoesSelecionadas.set(new Set([...select.selectedOptions].map((o) => o.value)));
+  }
+
+  protected atualizarNome(event: Event): void {
+    this.nome.set((event.target as HTMLInputElement).value);
+  }
+
+  protected atualizarRepo(event: Event): void {
+    const valor = (event.target as HTMLInputElement).value;
+    this.repo.set(valor);
+    // Nas origens GitHub, imagens moram no mesmo repositório: a galeria acompanha.
+    if (this.origem() === 'github') this.galeriaRepo.set(valor);
+  }
+
+  protected atualizarTag(event: Event): void {
+    this.tagValor.set((event.target as HTMLInputElement).value);
+  }
+
+  protected atualizarArquivo(event: Event): void {
+    this.arquivoValor.set((event.target as HTMLInputElement).value);
+  }
+
+  protected atualizarGaleriaRepo(event: Event): void {
+    this.galeriaRepo.set((event.target as HTMLInputElement).value);
+  }
+
+  protected escolherTag(tag: string): void {
+    if (tag) this.tagValor.set(prefixoDeTag(tag));
+  }
+
+  protected escolherArquivo(nome: string): void {
+    if (nome) this.arquivoValor.set(nome);
   }
 
   /** Só mods que existem no catálogo podem ser dependência (menos o próprio, na edição). */
@@ -137,12 +228,108 @@ export class Submit {
     this.dependenciasEscolhidas.update((atual) => atual.filter((d) => d !== id));
   }
 
+  /** Releases do repositório alimentam as sugestões de tag e de arquivo — uma chamada só. */
+  protected async buscarReleases(): Promise<void> {
+    const repo = this.repo().trim();
+    if (!repo) {
+      this.fail('Preencha o repositório antes de buscar as releases.');
+      return;
+    }
+    this.buscandoReleases.set(true);
+    this.avisoReleases.set(null);
+    this.error.set(null);
+    try {
+      const releases = await firstValueFrom(
+        this.http.get<GithubRelease[]>(`https://api.github.com/repos/${repo}/releases?per_page=20`),
+      );
+      this.tagsGithub.set(releases.map((r) => r.tag_name).filter(Boolean));
+      this.assetsGithub.set([
+        ...new Set(releases.flatMap((r) => r.assets.map((a) => a.name)).filter(Boolean)),
+      ]);
+      this.avisoReleases.set(
+        releases.length
+          ? null
+          : 'O repositório ainda não tem releases: informe o prefixo da tag e o arquivo à mão.',
+      );
+    } catch {
+      this.fail('Não consegui buscar as releases no GitHub. Verifique o repositório (dono/nome).');
+    } finally {
+      this.buscandoReleases.set(false);
+    }
+  }
+
+  /** Lista as imagens da árvore do repositório (API pública, sem login) para o autor escolher. */
+  protected async buscarImagens(): Promise<void> {
+    const repo = this.galeriaRepo().trim();
+    if (!repo) {
+      this.fail('Informe o repositório das imagens antes de buscar.');
+      return;
+    }
+    this.buscandoImagens.set(true);
+    this.avisoImagens.set(null);
+    this.error.set(null);
+    try {
+      const info = await firstValueFrom(
+        this.http.get<GithubRepo>(`https://api.github.com/repos/${repo}`),
+      );
+      const galho = info.default_branch || 'main';
+      const arvore = await firstValueFrom(
+        this.http.get<GithubTree>(
+          `https://api.github.com/repos/${repo}/git/trees/${galho}?recursive=1`,
+        ),
+      );
+      this.imagensGaleria.set(
+        arvore.tree
+          .filter((arquivo) => arquivo.type === 'blob' && IMAGEM_EXT.test(arquivo.path))
+          .slice(0, 60)
+          .map((arquivo) => ({
+            url: `https://raw.githubusercontent.com/${repo}/${galho}/${encodeURI(arquivo.path)}`,
+            label: arquivo.path,
+          })),
+      );
+      this.avisoImagens.set(
+        this.imagensGaleria().length
+          ? null
+          : 'Nenhuma imagem (png, jpg, webp, gif ou avif) encontrada no repositório.',
+      );
+    } catch {
+      this.fail('Não consegui listar as imagens do repositório. Verifique o endereço (dono/nome).');
+    } finally {
+      this.buscandoImagens.set(false);
+    }
+  }
+
+  protected imagemSelecionada(url: string): boolean {
+    return this.imagensSelecionadas().has(url);
+  }
+
+  protected alternarImagem(url: string, event: Event): void {
+    const marcado = (event.target as HTMLInputElement).checked;
+    if (marcado && this.imagensSelecionadas().size >= MAX_IMAGENS) {
+      (event.target as HTMLInputElement).checked = false;
+      this.fail(`No máximo ${MAX_IMAGENS} imagens na galeria.`);
+      return;
+    }
+    this.imagensSelecionadas.update((atual) => {
+      const novo = new Set(atual);
+      if (marcado) novo.add(url);
+      else novo.delete(url);
+      return novo;
+    });
+  }
+
   protected async submit(event: Event): Promise<void> {
     event.preventDefault();
     const form = event.target as HTMLFormElement;
     const value = (name: string) => (form.elements.namedItem(name) as HTMLInputElement).value.trim();
 
-    // Com o catálogo conhecendo versões, são checkboxes; sem catálogo, o autor digita (fallback).
+    const modId = this.editing() ? this.id()! : this.idAuto();
+    if (!modId) {
+      this.fail('Escreva o nome do mod: o id é gerado a partir dele.');
+      return;
+    }
+
+    // Com o catálogo conhecendo versões, é o select múltiplo; sem catálogo, o autor digita (fallback).
     const versoes = this.gameVersions.length
       ? [...this.versoesSelecionadas()]
       : value('versao-manual')
@@ -162,18 +349,14 @@ export class Submit {
       this.fail('No máximo 20 dependências.');
       return;
     }
-    const galeria = value('galeria')
-      .split('\n')
-      .map((item) => item.trim())
-      .filter((item) => item !== '');
+    const galeria = [...this.imagensSelecionadas()];
     if (
-      galeria.length > 10 ||
+      galeria.length > MAX_IMAGENS ||
       galeria.some((g) => !g.startsWith('https://raw.githubusercontent.com/'))
     ) {
-      this.fail('Cada endereço da galeria deve começar com https://raw.githubusercontent.com/ (máximo de 10).');
+      this.fail('A galeria aceita até 10 imagens do repositório (raw.githubusercontent.com).');
       return;
     }
-    const modId = this.editing() ? this.id()! : value('id');
     const mod: Record<string, unknown> = {
       id: modId,
       nome: value('nome'),
@@ -185,9 +368,9 @@ export class Submit {
     };
     if (this.origem() === 'github') {
       mod['origem'] = 'github';
-      mod['repo'] = value('repo');
-      mod['tag'] = value('tag');
-      mod['arquivo'] = value('arquivo');
+      mod['repo'] = this.repo().trim();
+      mod['tag'] = this.tagValor().trim();
+      mod['arquivo'] = this.arquivoValor().trim();
     } else {
       mod['origem'] = 'externa';
       mod['url'] = value('url');
@@ -210,10 +393,19 @@ export class Submit {
       // Envio aceito encerra a chave e a capa: a próxima operação nasce com chave própria.
       this.idempotencyKey = crypto.randomUUID();
       this.capa.set(null);
-      // Novo envio começa sem seleção; na edição a pré-seleção vem do próprio mod.
+      // Novo envio começa sem seleção nem sugestões; na edição a pré-seleção vem do próprio mod.
       if (!this.editing()) {
+        this.nome.set('');
+        this.repo.set('');
+        this.tagValor.set('');
+        this.arquivoValor.set('');
+        this.galeriaRepo.set('');
         this.versoesSelecionadas.set(new Set());
         this.dependenciasEscolhidas.set([]);
+        this.imagensSelecionadas.set(new Set());
+        this.imagensGaleria.set([]);
+        this.tagsGithub.set([]);
+        this.assetsGithub.set([]);
       }
       form.reset();
     } catch (error) {

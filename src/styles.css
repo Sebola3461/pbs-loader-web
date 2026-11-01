@@ -132,6 +132,7 @@ legend {
 input[type='search'],
 input[type='text'],
 input[type='password'],
+input[type='url'],
 select,
 textarea {
   width: 100%;
@@ -152,6 +153,7 @@ textarea {
 input[type='search']:focus-visible,
 input[type='text']:focus-visible,
 input[type='password']:focus-visible,
+input[type='url']:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   outline-offset: 0;

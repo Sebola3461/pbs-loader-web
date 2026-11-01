@@ -54,3 +54,4 @@ Thumbs.db
 
 # SQL de bootstrap do admin (contém a hash da senha do admin)
 /admin-bootstrap.sql
+memory/

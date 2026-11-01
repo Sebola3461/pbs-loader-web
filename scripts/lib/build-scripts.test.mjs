@@ -105,7 +105,7 @@ test('buildHeaders monta a CSP com os hashes sem repetir', () => {
   );
   assert.match(headers, new RegExp(`img-src 'self' data: ${COVER_ORIGIN} https:\\/\\/raw\\.githubusercontent\\.com`));
   assert.match(headers, /frame-src https:\/\/challenges\.cloudflare\.com;/);
-  assert.match(headers, /connect-src 'self';/);
+  assert.match(headers, /connect-src 'self' https:\/\/api\.github\.com;/);
   assert.match(
     headers,
     /style-src 'self' 'unsafe-inline' https:\/\/fonts\.googleapis\.com;/,

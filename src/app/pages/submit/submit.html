@@ -53,38 +53,14 @@
       @if (editing()) {
         A edição entra no catálogo quando a validação aceitar. O id e o dono não mudam.
       } @else {
-        O mod entra no catálogo depois de passar pela validação automática. O id é único e o endereço
-        da página leva o autor: duas pessoas podem ter mods de mesmo id.
+        O mod entra no catálogo depois de passar pela validação automática. O id é gerado do nome e o
+        endereço da página leva o autor: duas pessoas podem ter mods de mesmo id.
       }
     </p>
     <form class="form" (submit)="submit($event)">
       <fieldset class="secao">
         <legend>Identificação</legend>
         <div class="duo">
-          <div class="campo">
-            <label for="id">Id do mod</label>
-            <input
-              id="id"
-              name="id"
-              type="text"
-              required
-              minlength="2"
-              maxlength="64"
-              pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,63}"
-              spellcheck="false"
-              autocomplete="off"
-              placeholder="Ex.: PainelDigital"
-              [value]="editing() ? id() : ''"
-              [readonly]="editing()"
-            />
-            <p class="form-hint">
-              @if (editing()) {
-                Fixo na edição: o id não muda.
-              } @else {
-                Identificador técnico, sem espaços: letras, números, "_" ou "-", começando por letra ou número.
-              }
-            </p>
-          </div>
           <div class="campo">
             <label for="nome">Nome</label>
             <input
@@ -95,7 +71,21 @@
               maxlength="80"
               placeholder="Ex.: Painel Digital"
               [value]="prefill()?.nome ?? ''"
+              (input)="atualizarNome($event)"
             />
+          </div>
+          <div class="campo">
+            <label for="id">Id do mod</label>
+            <input
+              id="id"
+              name="id"
+              type="text"
+              readonly
+              spellcheck="false"
+              [value]="editing() ? id() : idAuto()"
+              aria-readonly="true"
+            />
+            <p class="form-hint">Gerado automaticamente a partir do nome.</p>
           </div>
         </div>
       </fieldset>
@@ -129,25 +119,26 @@
       <fieldset class="secao">
         <legend>Compatibilidade</legend>
         <div class="campo">
-          <span class="rotulo" id="rotulo-versoes">Versões do jogo</span>
+          <label for="versao-jogo">Versões do jogo</label>
           @if (gameVersions.length) {
-            <div class="check-group" role="group" aria-labelledby="rotulo-versoes">
+            <select
+              id="versao-jogo"
+              name="versao-jogo"
+              multiple
+              size="4"
+              required
+              (change)="alternarVersoes($event)"
+            >
               @for (versao of gameVersions; track versao) {
-                <label class="check">
-                  <input
-                    type="checkbox"
-                    name="versao-jogo"
-                    value="{{ versao }}"
-                    [checked]="versaoSelecionada(versao)"
-                    (change)="alternarVersao(versao, $event)"
-                  />
-                  <span>{{ versao }}</span>
-                </label>
+                <option [value]="versao" [selected]="versaoSelecionada(versao)">
+                  {{ versao }}
+                </option>
               }
-            </div>
-            <p class="form-hint">Marque todas as versões em que o mod funciona.</p>
+            </select>
+            <p class="form-hint">
+              Escolha todas as versões em que o mod funciona — segure Ctrl (ou Cmd) para várias.
+            </p>
           } @else {
-            <label class="visually-hidden" for="versao-manual">Versões do jogo</label>
             <input
               id="versao-manual"
               name="versao-manual"
@@ -177,8 +168,6 @@
                 </li>
               }
             </ul>
-          } @else {
-            <p class="form-hint">Nenhuma. Mods da comunidade podem depender de outros.</p>
           }
           @if (opcoesDependencia().length) {
             <div class="dep-add">
@@ -241,11 +230,38 @@
               pattern="[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}"
               spellcheck="false"
               placeholder="Ex.: fulana/painel-digital"
-              [value]="prefill()?.repo ?? ''"
+              [value]="repo()"
+              (input)="atualizarRepo($event)"
             />
           </div>
           <div class="campo">
+            <div class="github-fetch">
+              <button
+                type="button"
+                class="button button-secondary"
+                (click)="buscarReleases()"
+                [disabled]="buscandoReleases()"
+              >
+                {{ buscandoReleases() ? 'Buscando…' : 'Buscar releases no GitHub' }}
+              </button>
+              <p class="form-hint">
+                Puxa as tags e os arquivos das releases para escolher sem digitar.
+              </p>
+            </div>
+            @if (avisoReleases()) {
+              <p class="form-hint">{{ avisoReleases() }}</p>
+            }
+          </div>
+          <div class="campo">
             <label for="tag">Prefixo da tag</label>
+            @if (tagsGithub().length) {
+              <select id="tag-sugestao" #tagSugestao (change)="escolherTag(tagSugestao.value)">
+                <option value="">Escolha uma tag existente…</option>
+                @for (tag of tagsGithub(); track tag) {
+                  <option [value]="tag">{{ tag }}</option>
+                }
+              </select>
+            }
             <input
               id="tag"
               name="tag"
@@ -253,7 +269,8 @@
               required
               maxlength="64"
               placeholder="Ex.: PainelDigital-v"
-              [value]="prefill()?.tag ?? ''"
+              [value]="tagValor()"
+              (input)="atualizarTag($event)"
             />
             <p class="form-hint">
               O instalador procura a última release cuja tag começa com isso. Nova versão do mod = nova
@@ -262,6 +279,18 @@
           </div>
           <div class="campo">
             <label for="arquivo">Arquivo</label>
+            @if (assetsGithub().length) {
+              <select
+                id="arquivo-sugestao"
+                #arquivoSugestao
+                (change)="escolherArquivo(arquivoSugestao.value)"
+              >
+                <option value="">Escolha o arquivo de uma release…</option>
+                @for (asset of assetsGithub(); track asset) {
+                  <option [value]="asset">{{ asset }}</option>
+                }
+              </select>
+            }
             <input
               id="arquivo"
               name="arquivo"
@@ -269,7 +298,8 @@
               required
               maxlength="128"
               placeholder="Ex.: PainelDigital.dll"
-              [value]="prefill()?.arquivo ?? ''"
+              [value]="arquivoValor()"
+              (input)="atualizarArquivo($event)"
             />
           </div>
         } @else {
@@ -316,17 +346,53 @@
           </p>
         </div>
         <div class="campo">
-          <label for="galeria">Galeria (opcional)</label>
-          <textarea
-            id="galeria"
-            name="galeria"
-            rows="4"
-            placeholder="https://raw.githubusercontent.com/…"
-            [value]="prefill()?.galeria ?? ''"
-          ></textarea>
+          <span class="rotulo" id="rotulo-galeria">Galeria (opcional)</span>
+          <div class="github-fetch">
+            <label class="visually-hidden" for="galeria-repo">Repositório das imagens</label>
+            <input
+              id="galeria-repo"
+              type="text"
+              spellcheck="false"
+              placeholder="dono/repo das imagens"
+              [value]="galeriaRepo()"
+              (input)="atualizarGaleriaRepo($event)"
+            />
+            <button
+              type="button"
+              class="button button-secondary"
+              (click)="buscarImagens()"
+              [disabled]="buscandoImagens()"
+            >
+              {{ buscandoImagens() ? 'Buscando…' : 'Buscar imagens' }}
+            </button>
+          </div>
+          @if (avisoImagens()) {
+            <p class="form-hint">{{ avisoImagens() }}</p>
+          }
+          @if (imagensGaleria().length) {
+            <ul class="galeria-pick" aria-labelledby="rotulo-galeria">
+              @for (img of imagensGaleria(); track img.url) {
+                <li>
+                  <label class="galeria-item">
+                    <input
+                      type="checkbox"
+                      [checked]="imagemSelecionada(img.url)"
+                      (change)="alternarImagem(img.url, $event)"
+                    />
+                    <img [src]="img.url" alt="" loading="lazy" />
+                    <span class="galeria-nome">{{ img.label }}</span>
+                  </label>
+                </li>
+              }
+            </ul>
+          }
           <p class="form-hint">
-            Um endereço por linha, de imagens hospedadas no repositório do mod
-            (raw.githubusercontent.com). Aparecem como galeria na página do mod.
+            @if (imagensSelecionadas().size) {
+              {{ imagensSelecionadas().size }} de até 10 imagens escolhidas. Aparecem como galeria na
+              página do mod.
+            } @else {
+              Escolha até 10 imagens do repositório do mod para a galeria da página.
+            }
           </p>
         </div>
       </fieldset>

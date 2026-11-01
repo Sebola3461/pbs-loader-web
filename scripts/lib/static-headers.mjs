@@ -80,7 +80,8 @@ export function buildHeaders(scriptHashes) {
     `style-src 'self' 'unsafe-inline' ${GOOGLE_FONTS.css}`,
     `img-src 'self' data: ${COVER_ORIGIN} https://raw.githubusercontent.com`,
     `frame-src ${TURNSTILE.frame}`,
-    "connect-src 'self'",
+    // A API pública do GitHub alimenta o formulário de envio (releases e imagens da galeria).
+    "connect-src 'self' https://api.github.com",
     `font-src 'self' ${GOOGLE_FONTS.font}`,
     "object-src 'none'",
     "base-uri 'self'",
