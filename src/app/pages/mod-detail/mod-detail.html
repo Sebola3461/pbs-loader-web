@@ -25,6 +25,13 @@
         <a class="button" [href]="view.download.url" rel="noopener nofollow">{{
           view.download.label
         }}</a>
+        <!-- [attr.href] e não [href]: o esquema pbsloader:// é de aplicativo e o sanitizador do Angular cortaria. -->
+        <a
+          class="button button-secondary"
+          [attr.href]="'pbsloader://mod/' + view.mod.id"
+          title="Abre o instalador com este mod marcado"
+          >Instalar pelo loader</a
+        >
         @if (view.mod.pagina; as pagina) {
           <a class="button button-secondary" [href]="pagina" rel="noopener nofollow ugc"
             >Página do mod</a

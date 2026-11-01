@@ -46,9 +46,12 @@ describe('ModDetail', () => {
 
     expect(text(el, 'h1')).toBe('Painel Digital');
     expect(el.querySelector('.author a')?.getAttribute('href')).toBe('/autores/gh-fulana');
-    const [download, page] = [...el.querySelectorAll<HTMLAnchorElement>('.actions a')];
+    const [download, loader, page] = [...el.querySelectorAll<HTMLAnchorElement>('.actions a')];
     expect(download.getAttribute('href')).toBe('https://github.com/fulana/painel-digital/releases');
     expect(download.textContent?.trim()).toBe('Baixar no GitHub');
+    // O deep link abre o instalador com o mod marcado; [attr.href] evita a sanitização de esquema customizado.
+    expect(loader.getAttribute('href')).toBe('pbsloader://mod/PainelDigital');
+    expect(loader.textContent?.trim()).toBe('Instalar pelo loader');
     expect(page.getAttribute('href')).toBe('https://github.com/fulana/painel-digital');
     expect(el.querySelector('img.cover')?.getAttribute('alt')).toBe('Capa de Painel Digital');
     expect(text(el, '.notice h3')).toBe('Instalar pelo PBS Loader');
@@ -60,10 +63,14 @@ describe('ModDetail', () => {
     expect(text(el, '.facts dd:nth-of-type(3)')).toBe('1 de setembro de 2026');
   });
 
-  it('link externo avisa e não sugere o instalador', async () => {
+  it('link externo avisa e sugere o instalador', async () => {
     const { el } = await render('LinhaCentro', SITE_SLUG, null, externalMod());
     expect(text(el, '.actions a')).toBe('Abrir link externo');
-    expect(el.querySelectorAll('.actions a')).toHaveLength(1);
+    // O loader instala origem externa (zip por https): o deep link aparece para todos os tipos.
+    expect([...el.querySelectorAll<HTMLAnchorElement>('.actions a')].map((a) => a.getAttribute('href'))).toEqual([
+      'https://exemplo.com/linha.zip',
+      'pbsloader://mod/LinhaCentro',
+    ]);
     expect(text(el, '.notice-warning h3')).toBe('Arquivo fora do GitHub');
     expect(text(el, '.notice:not(.notice-warning)')).toBeUndefined();
     expect(text(el, '.badge-warning')).toBe('Link externo');
