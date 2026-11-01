@@ -1,9 +1,10 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { afterEach, vi } from 'vitest';
 import { authorSlug } from '../../catalog/catalog';
+import { CatalogMod } from '../../catalog/catalog.model';
 import { githubMod, provideCatalog } from '../../../testing/catalog-fixtures';
 import { SessionStore } from '../../session/session.store';
 import { Submit } from './submit';
@@ -18,9 +19,14 @@ HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
   this.open = false;
 };
 
-async function setup(user: typeof ANA | null) {
+async function setup(user: typeof ANA | null, mod: CatalogMod | null = githubMod()) {
   TestBed.configureTestingModule({
-    providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting(), provideCatalog()],
+    providers: [
+      provideRouter([]),
+      provideHttpClient(),
+      provideHttpClientTesting(),
+      provideCatalog(...(mod ? [mod] : [])),
+    ],
   });
   const fixture = TestBed.createComponent(Submit);
   const http = TestBed.inject(HttpTestingController);
@@ -32,7 +38,7 @@ async function setup(user: typeof ANA | null) {
   return { fixture, el: fixture.nativeElement as HTMLElement, http };
 }
 
-/** Moda edição: o mod pertence à Ana e a rota traz o slug do dono. */
+/** Modo edição: o mod pertence à Ana e a rota traz o slug do dono. */
 async function setupEdicao(mod = githubMod({ dono: { site: ANA.id } })) {
   TestBed.configureTestingModule({
     providers: [
@@ -63,6 +69,27 @@ function fill(el: HTMLElement, values: Record<string, string>) {
   }
 }
 
+/** O jsdom não dispara change no click de checkbox/rádio: marcar e disparar na mão. */
+function marcarVersao(el: HTMLElement, versao: string) {
+  const caixa = el.querySelector(
+    `input[name="versao-jogo"][value="${versao}"]`,
+  ) as HTMLInputElement;
+  caixa.checked = true;
+  caixa.dispatchEvent(new Event('change'));
+}
+
+function adicionarDependencia(fixture: ComponentFixture<Submit>, id: string) {
+  const el = fixture.nativeElement as HTMLElement;
+  const select = el.querySelector('#dep-select') as HTMLSelectElement;
+  select.value = id;
+  select.dispatchEvent(new Event('change'));
+  // Reavaliar [disabled] do botão (depende do valor do select) antes de clicar.
+  fixture.detectChanges();
+  (el.querySelector('.dep-add button') as HTMLButtonElement).click();
+  // O chip renderiza depois do CD que o clique do botão dispara.
+  fixture.detectChanges();
+}
+
 /** O jsdom valida e dispara o submit sem bloquear: o evento chega ao componente como no navegador. */
 function submitForm(el: HTMLElement) {
   el.querySelector('form')!.dispatchEvent(new Event('submit'));
@@ -72,7 +99,6 @@ const FORM_DEFAULTS = {
   id: 'Novo',
   nome: 'Mod Novo',
   descricao: 'Descrição.',
-  versoes: '307',
   repo: 'ana/mod-novo',
   tag: 'Novo-v',
   arquivo: 'Novo.dll',
@@ -86,16 +112,19 @@ describe('Submit', () => {
     expect(el.querySelector('form')).toBeNull();
   });
 
-  it('logado mostra o formulário com todos os tipos de mod', async () => {
+  it('logado mostra o formulário com versões do catálogo e todos os tipos', async () => {
     const { el } = await setup(ANA);
     expect(el.querySelectorAll('#tipo option')).toHaveLength(7);
+    expect(el.querySelector('input[name="versao-jogo"]')).not.toBeNull();
+    expect(el.querySelector('#dep-select')).not.toBeNull();
     expect(el.querySelector('#repo')).not.toBeNull();
     expect(el.querySelector('#url')).toBeNull();
   });
 
   it('envia publish com dono e idempotência do cliente', async () => {
     const { fixture, el, http } = await setup(ANA);
-    fill(el, { ...FORM_DEFAULTS, versoes: '307, 306' });
+    fill(el, FORM_DEFAULTS);
+    marcarVersao(el, '307');
     submitForm(el);
     const req = http.expectOne('/api/submissions');
     expect(req.request.method).toBe('POST');
@@ -107,11 +136,10 @@ describe('Submit', () => {
       id: 'Novo',
       nome: 'Mod Novo',
       tipo: 'plugin',
-      versoesDoJogo: ['307', '306'],
+      versoesDoJogo: ['307'],
       dependencias: [],
       origem: 'github',
       repo: 'ana/mod-novo',
-      capa: null,
     });
     req.flush({ submission: { id: 's1', modId: 'Novo', status: 'pending', prNumber: 12 } });
     await fixture.whenStable();
@@ -123,6 +151,7 @@ describe('Submit', () => {
   it('erro da API aparece no formulário e permite tentar de novo', async () => {
     const { fixture, el, http } = await setup(ANA);
     fill(el, FORM_DEFAULTS);
+    marcarVersao(el, '307');
     submitForm(el);
     http
       .expectOne('/api/submissions')
@@ -135,13 +164,29 @@ describe('Submit', () => {
     expect(el.querySelector('.panel')).toBeNull();
   });
 
-  it('versões vazias falham no cliente, sem chamada à API', async () => {
+  it('sem versão marcada falha no cliente, sem chamada à API', async () => {
     const { fixture, el, http } = await setup(ANA);
-    fill(el, { ...FORM_DEFAULTS, versoes: ' , ' });
+    fill(el, FORM_DEFAULTS);
     submitForm(el);
     fixture.detectChanges();
-    expect(text(el, '.form-error')).toContain('Informe de 1 a 10 versões');
+    expect(text(el, '.form-error')).toContain('Selecione de 1 a 10 versões');
     http.expectNone('/api/submissions');
+  });
+
+  it('dependência vira chip e vai no POST como id do catálogo', async () => {
+    const { fixture, el, http } = await setup(ANA);
+    fill(el, FORM_DEFAULTS);
+    marcarVersao(el, '307');
+    adicionarDependencia(fixture, 'PainelDigital');
+    expect(el.querySelector('.chip')?.textContent).toContain('PainelDigital');
+    submitForm(el);
+    const req = http.expectOne('/api/submissions');
+    expect((req.request.body as Record<string, unknown>)['mod']).toMatchObject({
+      dependencias: ['PainelDigital'],
+    });
+    req.flush({ submission: { id: 's2', modId: 'Novo', status: 'pending', prNumber: null } });
+    await fixture.whenStable();
+    fixture.detectChanges();
   });
 
   it('link externo troca os campos e envia a url', async () => {
@@ -157,16 +202,16 @@ describe('Submit', () => {
       id: 'Externo',
       nome: 'Mod Externo',
       descricao: 'Descrição.',
-      versoes: '307',
       url: 'https://exemplo.com/mod.zip',
     });
+    marcarVersao(el, '307');
     submitForm(el);
     const req = http.expectOne('/api/submissions');
     expect((req.request.body as Record<string, unknown>)['mod']).toMatchObject({
       origem: 'externa',
       url: 'https://exemplo.com/mod.zip',
     });
-    req.flush({ submission: { id: 's2', modId: 'Externo', status: 'pending', prNumber: null } });
+    req.flush({ submission: { id: 's3', modId: 'Externo', status: 'pending', prNumber: null } });
     await fixture.whenStable();
     fixture.detectChanges();
   });
@@ -200,10 +245,11 @@ describe('Submit', () => {
     expect(hints.some((t) => t?.includes('capa.png convertida para WebP'))).toBe(true);
 
     fill(el, FORM_DEFAULTS);
+    marcarVersao(el, '307');
     submitForm(el);
     const req = http.expectOne('/api/submissions');
     expect((req.request.body as Record<string, unknown>)['capaBase64']).toBeTruthy();
-    req.flush({ submission: { id: 's6', modId: 'Novo', status: 'pending', prNumber: null } });
+    req.flush({ submission: { id: 's4', modId: 'Novo', status: 'pending', prNumber: null } });
     await fixture.whenStable();
     fixture.detectChanges();
     vi.restoreAllMocks();
@@ -245,19 +291,30 @@ describe('Submit', () => {
     vi.unstubAllGlobals();
   });
 
-  it('modo edição pré-preenche o formulário e envia como edit', async () => {
+  it('modo edição pré-preenche versões, dependências e descrição, e envia como edit', async () => {
     const { fixture, el, http } = await setupEdicao();
     expect((el.querySelector('#nome') as HTMLInputElement).value).toBe('Painel Digital');
     expect((el.querySelector('#id') as HTMLInputElement).readOnly).toBe(true);
     expect(text(el, '.lead')).toContain('O id e o dono não mudam');
-    fill(el, { descricao: 'Descrição nova.', versoes: '307, 306' });
+    const caixa = el.querySelector(
+      'input[name="versao-jogo"][value="307"]',
+    ) as HTMLInputElement;
+    expect(caixa.checked).toBe(true);
+    expect(el.querySelector('.chip')?.textContent).toContain('PBSLoaderCommonUtils');
+    fill(el, { descricao: 'Descrição nova.' });
     submitForm(el);
     const req = http.expectOne('/api/submissions');
     const body = req.request.body as Record<string, unknown>;
     expect(body['operation']).toBe('edit');
     expect(body['modId']).toBe('PainelDigital');
     expect((body['mod'] as Record<string, unknown>)['descricao']).toBe('Descrição nova.');
-    req.flush({ submission: { id: 's3', modId: 'PainelDigital', status: 'pending', prNumber: null } });
+    expect((body['mod'] as Record<string, unknown>)['versoesDoJogo']).toEqual(['307']);
+    expect((body['mod'] as Record<string, unknown>)['dependencias']).toEqual([
+      'PBSLoaderCommonUtils',
+    ]);
+    req.flush({
+      submission: { id: 's5', modId: 'PainelDigital', status: 'pending', prNumber: null },
+    });
     await fixture.whenStable();
     fixture.detectChanges();
     expect(text(el, '.panel h1')).toBe('Envio recebido');
@@ -281,7 +338,7 @@ describe('Submit', () => {
     expect(body['operation']).toBe('remove');
     expect(body['modId']).toBe('PainelDigital');
     expect(body['mod']).toBeUndefined();
-    req.flush({ submission: { id: 's4', modId: 'PainelDigital', status: 'pending', prNumber: null } });
+    req.flush({ submission: { id: 's6', modId: 'PainelDigital', status: 'pending', prNumber: null } });
     await fixture.whenStable();
     fixture.detectChanges();
     expect(text(el, '.panel h1')).toBe('Remoção enviada');
@@ -305,10 +362,11 @@ describe('Submit', () => {
   it('envio aceito volta ao formulário limpo ao pedir outro envio', async () => {
     const { fixture, el, http } = await setup(ANA);
     fill(el, FORM_DEFAULTS);
+    marcarVersao(el, '307');
     submitForm(el);
     http
       .expectOne('/api/submissions')
-      .flush({ submission: { id: 's5', modId: 'Novo', status: 'pending', prNumber: null } });
+      .flush({ submission: { id: 's7', modId: 'Novo', status: 'pending', prNumber: null } });
     await fixture.whenStable();
     fixture.detectChanges();
     const another = [...el.querySelectorAll('.panel .form-actions button')].find(
@@ -318,6 +376,7 @@ describe('Submit', () => {
     fixture.detectChanges();
     expect(el.querySelector('form')).not.toBeNull();
     expect((el.querySelector('#nome') as HTMLInputElement).value).toBe('');
+    expect((el.querySelector('input[name="versao-jogo"]') as HTMLInputElement).checked).toBe(false);
   });
 
   it('galeria do mod vai no POST como imagens', async () => {
@@ -326,20 +385,57 @@ describe('Submit', () => {
       ...FORM_DEFAULTS,
       galeria: 'https://raw.githubusercontent.com/Sebola3461/FreeWalk/main/prints/salao.webp',
     });
+    marcarVersao(el, '307');
     submitForm(el);
     const req = http.expectOne('/api/submissions');
     expect((req.request.body as Record<string, unknown>)['imagens']).toEqual([
       'https://raw.githubusercontent.com/Sebola3461/FreeWalk/main/prints/salao.webp',
     ]);
-    req.flush({ submission: { id: 's7', modId: 'Novo', status: 'pending', prNumber: null } });
+    req.flush({ submission: { id: 's8', modId: 'Novo', status: 'pending', prNumber: null } });
   });
 
   it('galeria com endereço fora do GitHub falha no cliente, sem POST', async () => {
     const { fixture, el, http } = await setup(ANA);
     fill(el, { ...FORM_DEFAULTS, galeria: 'https://exemplo.com/print.png' });
+    marcarVersao(el, '307');
     submitForm(el);
     fixture.detectChanges();
     expect(text(el, '.form-error')).toContain('raw.githubusercontent.com');
+    http.expectNone('/api/submissions');
+  });
+
+  it('sem versões no catálogo, o formulário aceita versões manuais', async () => {
+    const { el, http } = await setup(ANA, null);
+    expect(el.querySelector('input[name="versao-jogo"]')).toBeNull();
+    expect(el.querySelector('#versao-manual')).not.toBeNull();
+    fill(el, { ...FORM_DEFAULTS, 'versao-manual': '307' });
+    submitForm(el);
+    const req = http.expectOne('/api/submissions');
+    expect(
+      ((req.request.body as Record<string, unknown>)['mod'] as Record<string, unknown>)[
+        'versoesDoJogo'
+      ],
+    ).toEqual(['307']);
+    req.flush({ submission: { id: 's9', modId: 'Novo', status: 'pending', prNumber: null } });
+  });
+
+  it('versões manuais fora do formato são recusadas', async () => {
+    const { fixture, el, http } = await setup(ANA, null);
+    fill(el, { ...FORM_DEFAULTS, 'versao-manual': 'abc, 307' });
+    submitForm(el);
+    fixture.detectChanges();
+    expect(text(el, '.form-error')).toContain('números de até 6 dígitos');
+    http.expectNone('/api/submissions');
+  });
+
+  it('cancelar a remoção fecha o diálogo sem enviar nada', async () => {
+    const { fixture, el, http } = await setupEdicao();
+    (el.querySelector('.danger button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const dialog = el.querySelector('dialog') as HTMLDialogElement;
+    (dialog.querySelector('.button-link') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(dialog.open).toBe(false);
     http.expectNone('/api/submissions');
   });
 });

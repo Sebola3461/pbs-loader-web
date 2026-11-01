@@ -132,7 +132,8 @@ legend {
 input[type='search'],
 input[type='text'],
 input[type='password'],
-select {
+select,
+textarea {
   width: 100%;
   min-height: 2.75rem;
   padding: var(--space-2) var(--space-3);
@@ -143,10 +144,16 @@ select {
   border-radius: var(--radius);
 }
 
+textarea {
+  min-height: 7.5rem;
+  resize: vertical;
+}
+
 input[type='search']:focus-visible,
 input[type='text']:focus-visible,
 input[type='password']:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
   outline-offset: 0;
   border-color: var(--color-primary);
 }

@@ -163,6 +163,27 @@ Russo One só existe no peso 400 — nunca fingir peso com stroke. Chakra Petch 
 | Font | Chakra Petch 1rem |
 | Focus Border | #FFB020 |
 | Error Border | #A8894A (herdado do warning) |
+| Textarea | igual ao input; min-height 7.5rem, resize vertical |
+
+### Checkbox/Rádio pílula (check-group)
+| Property | Value |
+|----------|-------|
+| Background | #12151D |
+| Border | 1px solid #262C3A |
+| Border Radius | 0.375rem |
+| Min Height | 2.5rem |
+| Checked BG | #2E2410 (primary-soft) + borda #FFB020, peso 600 |
+| Hover BG | #191E28 |
+| Accent | #FFB020 |
+
+### Chips de dependência
+| Property | Value |
+|----------|-------|
+| Background | #2E2410 |
+| Border | 1px solid #FFB020 |
+| Border Radius | 999px |
+| Font | Chakra Petch 0.875rem 600 |
+| Remover | botão circular 1.5rem, hover rgb(0 0 0 / 0.2) |
 
 ### Navigation
 | Property | Value |

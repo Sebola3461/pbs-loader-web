@@ -3,6 +3,7 @@ import {
   Component,
   ElementRef,
   computed,
+  effect,
   inject,
   input,
   signal,
@@ -17,17 +18,14 @@ import { apiErrorMessage } from '../../session/api-error';
 import { SessionStore } from '../../session/session.store';
 import { converterParaWebp } from './webp';
 
-/** Formato do id de mod, igual ao que a API e o catálogo exigem. */
-const MOD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/;
-
 interface SubmissionResult {
   submission: { id: string; modId: string; status: string; prNumber: number | null };
 }
 
 /**
- * Formulário de envio — e de edição/remoção, quando a rota traz autor e id. A chave de idempotência nasce quando
- * o formulário abre e só troca depois de um envio aceito: se a rede falhar no meio, reenviar a mesma chave não
- * cria dois mods.
+ * Formulário de envio — e de edição/remoção, quando a rota traz autor e id. Versões e dependências são
+ * selecionadas de listas do catálogo (nada digitado à mão); a chave de idempotência nasce quando o formulário
+ * abre e só troca depois de um envio aceito.
  */
 @Component({
   selector: 'app-submit',
@@ -61,7 +59,6 @@ export class Submit {
       tipo: mod.tipo,
       descricao: mod.descricao,
       versoes: mod.versoesDoJogo.join(', '),
-      dependencias: mod.dependencias.join(', '),
       galeria: mod.imagens?.join('\n') ?? '',
       pagina: mod.pagina ?? '',
       repo: github ? github.repo : '',
@@ -78,6 +75,7 @@ export class Submit {
     return Boolean(user && mod && 'site' in mod.dono && mod.dono.site === user.id);
   });
   protected readonly tipos = Object.entries(MOD_TYPE_LABELS);
+  protected readonly gameVersions = this.catalog.gameVersions;
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly sent = signal<{ modId: string; prNumber: number | null; removed: boolean } | null>(null);
@@ -87,29 +85,81 @@ export class Submit {
   protected readonly capa = signal<{ nome: string; base64: string } | null>(null);
   protected readonly carregandoCapa = signal(false);
   protected readonly removing = signal(false);
+  protected readonly versoesSelecionadas = signal<Set<string>>(new Set());
+  protected readonly dependenciasEscolhidas = signal<string[]>([]);
+  private readonly preenchido = signal(false);
   private readonly erro = viewChild<ElementRef<HTMLElement>>('erro');
   private readonly removeDialog = viewChild.required<ElementRef<HTMLDialogElement>>('removeDialog');
   private idempotencyKey = crypto.randomUUID();
 
-  /** Versões e dependências viram listas no cliente; vazio significar "sem" (o que é válido para dependências). */
+  constructor() {
+    // Na edição, as versões e dependências atuais do mod partem pré-marcadas.
+    effect(() => {
+      const mod = this.original();
+      if (this.editing() && mod && !this.preenchido()) {
+        this.versoesSelecionadas.set(new Set(mod.versoesDoJogo));
+        this.dependenciasEscolhidas.set([...mod.dependencias]);
+        this.preenchido.set(true);
+      }
+    });
+  }
+
+  protected versaoSelecionada(versao: string): boolean {
+    return this.versoesSelecionadas().has(versao);
+  }
+
+  protected alternarVersao(versao: string, event: Event): void {
+    const marcado = (event.target as HTMLInputElement).checked;
+    this.versoesSelecionadas.update((marcadas) => {
+      const atual = new Set(marcadas);
+      if (marcado) atual.add(versao);
+      else atual.delete(versao);
+      return atual;
+    });
+  }
+
+  /** Só mods que existem no catálogo podem ser dependência (menos o próprio, na edição). */
+  protected readonly opcoesDependencia = computed(() => {
+    const escolhidas = new Set(this.dependenciasEscolhidas());
+    const proprioId = this.editing() ? this.id() : null;
+    return this.catalog.mods
+      .filter((m) => m.id !== proprioId && !escolhidas.has(m.id))
+      .map((m) => ({ id: m.id, nome: m.nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  });
+
+  protected adicionarDependencia(id: string): void {
+    if (!id || this.dependenciasEscolhidas().includes(id)) return;
+    this.dependenciasEscolhidas.update((atual) => [...atual, id]);
+  }
+
+  protected removerDependencia(id: string): void {
+    this.dependenciasEscolhidas.update((atual) => atual.filter((d) => d !== id));
+  }
+
   protected async submit(event: Event): Promise<void> {
     event.preventDefault();
     const form = event.target as HTMLFormElement;
     const value = (name: string) => (form.elements.namedItem(name) as HTMLInputElement).value.trim();
-    const list = (name: string) =>
-      value(name)
-        .split(',')
-        .map((item) => item.trim())
-        .filter((item) => item !== '');
 
-    const versoes = list('versoes');
-    if (versoes.length === 0 || versoes.length > 10 || versoes.some((v) => v === '' || v.length > 10)) {
-      this.fail('Informe de 1 a 10 versões do jogo, separadas por vírgula (ex.: 307, 306).');
+    // Com o catálogo conhecendo versões, são checkboxes; sem catálogo, o autor digita (fallback).
+    const versoes = this.gameVersions.length
+      ? [...this.versoesSelecionadas()]
+      : value('versao-manual')
+          .split(',')
+          .map((item) => item.trim())
+          .filter((item) => item !== '');
+    if (versoes.length === 0 || versoes.length > 10) {
+      this.fail('Selecione de 1 a 10 versões do jogo.');
       return;
     }
-    const dependencias = list('dependencias');
-    if (dependencias.length > 20 || dependencias.some((d) => !MOD_ID.test(d))) {
-      this.fail('Cada dependência precisa ser o id de um mod: letras, números, "_" ou "-".');
+    if (versoes.some((v) => !/^\d{1,6}$/.test(v))) {
+      this.fail('As versões do jogo são números de até 6 dígitos, como 307.');
+      return;
+    }
+    const dependencias = this.dependenciasEscolhidas();
+    if (dependencias.length > 20) {
+      this.fail('No máximo 20 dependências.');
       return;
     }
     const galeria = value('galeria')
@@ -132,7 +182,6 @@ export class Submit {
       versoesDoJogo: versoes,
       dependencias,
       pagina: value('pagina') === '' ? null : value('pagina'),
-      capa: null,
     };
     if (this.origem() === 'github') {
       mod['origem'] = 'github';
@@ -161,6 +210,11 @@ export class Submit {
       // Envio aceito encerra a chave e a capa: a próxima operação nasce com chave própria.
       this.idempotencyKey = crypto.randomUUID();
       this.capa.set(null);
+      // Novo envio começa sem seleção; na edição a pré-seleção vem do próprio mod.
+      if (!this.editing()) {
+        this.versoesSelecionadas.set(new Set());
+        this.dependenciasEscolhidas.set([]);
+      }
       form.reset();
     } catch (error) {
       this.fail(apiErrorMessage(error));

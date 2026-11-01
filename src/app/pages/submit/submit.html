@@ -58,188 +58,278 @@
       }
     </p>
     <form class="form" (submit)="submit($event)">
-      <label for="id">Id do mod</label>
-      <input
-        id="id"
-        name="id"
-        type="text"
-        required
-        minlength="2"
-        maxlength="64"
-        pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,63}"
-        spellcheck="false"
-        autocomplete="off"
-        placeholder="Ex.: PainelDigital"
-        [value]="editing() ? id() : ''"
-        [readonly]="editing()"
-      />
-      <p class="form-hint">
-        @if (editing()) {
-          Fixo na edição: o id não muda.
-        } @else {
-          Identificador técnico, sem espaços: letras, números, "_" ou "-", começando por letra ou número.
-        }
-      </p>
-
-      <label for="nome">Nome</label>
-      <input
-        id="nome"
-        name="nome"
-        type="text"
-        required
-        maxlength="80"
-        placeholder="Ex.: Painel Digital"
-        [value]="prefill()?.nome ?? ''"
-      />
-
-      <label for="tipo">Tipo</label>
-      <select id="tipo" name="tipo" required>
-        @for (tipo of tipos; track tipo[0]) {
-          <option [value]="tipo[0]" [selected]="tipo[0] === (prefill()?.tipo ?? 'plugin')">
-            {{ tipo[1] }}
-          </option>
-        }
-      </select>
-
-      <label for="descricao">Descrição</label>
-      <textarea
-        id="descricao"
-        name="descricao"
-        rows="5"
-        required
-        maxlength="2000"
-        placeholder="O que o mod faz, como instalar e o que ele precisa."
-        [value]="prefill()?.descricao ?? ''"
-      ></textarea>
-
-      <label for="versoes">Versões do jogo</label>
-      <input
-        id="versoes"
-        name="versoes"
-        type="text"
-        required
-        placeholder="Ex.: 307, 306"
-        [value]="prefill()?.versoes ?? ''"
-      />
-      <p class="form-hint">Separadas por vírgula.</p>
-
-      <label for="dependencias">Dependências</label>
-      <input
-        id="dependencias"
-        name="dependencias"
-        type="text"
-        placeholder="Ex.: PBSLoaderCommonUtils"
-        [value]="prefill()?.dependencias ?? ''"
-      />
-      <p class="form-hint">Ids de outros mods, separados por vírgula. Sem dependências, deixe vazio.</p>
-
-      <fieldset>
-        <legend>Origem do arquivo</legend>
-        <label class="radio">
-          <input
-            type="radio"
-            name="origem"
-            value="github"
-            [checked]="origem() === 'github'"
-            (change)="mudarOrigem($event)"
-          />
-          Release no GitHub
-        </label>
-        <label class="radio">
-          <input
-            type="radio"
-            name="origem"
-            value="externa"
-            [checked]="origem() === 'externa'"
-            (change)="mudarOrigem($event)"
-          />
-          Link externo
-        </label>
+      <fieldset class="secao">
+        <legend>Identificação</legend>
+        <div class="duo">
+          <div class="campo">
+            <label for="id">Id do mod</label>
+            <input
+              id="id"
+              name="id"
+              type="text"
+              required
+              minlength="2"
+              maxlength="64"
+              pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,63}"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="Ex.: PainelDigital"
+              [value]="editing() ? id() : ''"
+              [readonly]="editing()"
+            />
+            <p class="form-hint">
+              @if (editing()) {
+                Fixo na edição: o id não muda.
+              } @else {
+                Identificador técnico, sem espaços: letras, números, "_" ou "-", começando por letra ou número.
+              }
+            </p>
+          </div>
+          <div class="campo">
+            <label for="nome">Nome</label>
+            <input
+              id="nome"
+              name="nome"
+              type="text"
+              required
+              maxlength="80"
+              placeholder="Ex.: Painel Digital"
+              [value]="prefill()?.nome ?? ''"
+            />
+          </div>
+        </div>
       </fieldset>
 
-      @if (origem() === 'github') {
-        <label for="repo">Repositório (dono/nome)</label>
-        <input
-          id="repo"
-          name="repo"
-          type="text"
-          required
-          pattern="[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}"
-          spellcheck="false"
-          placeholder="Ex.: fulana/painel-digital"
-          [value]="prefill()?.repo ?? ''"
-        />
+      <fieldset class="secao">
+        <legend>Detalhes</legend>
+        <div class="campo">
+          <label for="tipo">Tipo</label>
+          <select id="tipo" name="tipo" required>
+            @for (tipo of tipos; track tipo[0]) {
+              <option [value]="tipo[0]" [selected]="tipo[0] === (prefill()?.tipo ?? 'plugin')">
+                {{ tipo[1] }}
+              </option>
+            }
+          </select>
+        </div>
+        <div class="campo">
+          <label for="descricao">Descrição</label>
+          <textarea
+            id="descricao"
+            name="descricao"
+            rows="5"
+            required
+            maxlength="2000"
+            placeholder="O que o mod faz, como instalar e o que ele precisa."
+            [value]="prefill()?.descricao ?? ''"
+          ></textarea>
+        </div>
+      </fieldset>
 
-        <label for="tag">Prefixo da tag</label>
-        <input
-          id="tag"
-          name="tag"
-          type="text"
-          required
-          maxlength="64"
-          placeholder="Ex.: PainelDigital-v"
-          [value]="prefill()?.tag ?? ''"
-        />
-        <p class="form-hint">O instalador procura a última release cuja tag começa com isso. Nova versão do mod = nova release com esse prefixo.</p>
+      <fieldset class="secao">
+        <legend>Compatibilidade</legend>
+        <div class="campo">
+          <span class="rotulo" id="rotulo-versoes">Versões do jogo</span>
+          @if (gameVersions.length) {
+            <div class="check-group" role="group" aria-labelledby="rotulo-versoes">
+              @for (versao of gameVersions; track versao) {
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    name="versao-jogo"
+                    value="{{ versao }}"
+                    [checked]="versaoSelecionada(versao)"
+                    (change)="alternarVersao(versao, $event)"
+                  />
+                  <span>{{ versao }}</span>
+                </label>
+              }
+            </div>
+            <p class="form-hint">Marque todas as versões em que o mod funciona.</p>
+          } @else {
+            <label class="visually-hidden" for="versao-manual">Versões do jogo</label>
+            <input
+              id="versao-manual"
+              name="versao-manual"
+              type="text"
+              inputmode="numeric"
+              placeholder="Ex.: 307, 306"
+              [value]="prefill()?.versoes ?? ''"
+            />
+            <p class="form-hint">Separadas por vírgula (o catálogo ainda não conhece as versões).</p>
+          }
+        </div>
+        <div class="campo">
+          <span class="rotulo" id="rotulo-dependencias">Dependências</span>
+          @if (dependenciasEscolhidas().length) {
+            <ul class="chips" aria-labelledby="rotulo-dependencias">
+              @for (dep of dependenciasEscolhidas(); track dep) {
+                <li class="chip">
+                  {{ dep }}
+                  <button
+                    type="button"
+                    class="chip-remove"
+                    (click)="removerDependencia(dep)"
+                    [attr.aria-label]="'Remover dependência ' + dep"
+                  >
+                    ×
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="form-hint">Nenhuma. Mods da comunidade podem depender de outros.</p>
+          }
+          @if (opcoesDependencia().length) {
+            <div class="dep-add">
+              <label class="visually-hidden" for="dep-select">Adicionar dependência</label>
+              <select id="dep-select" #depSelect>
+                <option value="">Escolha um mod…</option>
+                @for (opcao of opcoesDependencia(); track opcao.id) {
+                  <option [value]="opcao.id">{{ opcao.nome }} ({{ opcao.id }})</option>
+                }
+              </select>
+              <button
+                type="button"
+                class="button button-secondary"
+                (click)="adicionarDependencia(depSelect.value); depSelect.value = ''"
+                [disabled]="!depSelect.value"
+              >
+                Adicionar
+              </button>
+            </div>
+          }
+        </div>
+      </fieldset>
 
-        <label for="arquivo">Arquivo</label>
-        <input
-          id="arquivo"
-          name="arquivo"
-          type="text"
-          required
-          maxlength="128"
-          placeholder="Ex.: PainelDigital.dll"
-          [value]="prefill()?.arquivo ?? ''"
-        />
-      } @else {
-        <label for="url">Endereço do arquivo</label>
-        <input
-          id="url"
-          name="url"
-          type="url"
-          required
-          pattern="https://.*"
-          placeholder="https://…"
-          [value]="prefill()?.url ?? ''"
-        />
-        <p class="form-hint">Precisa ser um endereço https direto para o arquivo.</p>
-      }
+      <fieldset class="secao">
+        <legend>Arquivo</legend>
+        <div class="campo">
+          <span class="rotulo" id="rotulo-origem">Origem do arquivo</span>
+          <div class="check-group" role="radiogroup" aria-labelledby="rotulo-origem">
+            <label class="check">
+              <input
+                type="radio"
+                name="origem"
+                value="github"
+                [checked]="origem() === 'github'"
+                (change)="mudarOrigem($event)"
+              />
+              <span>Release no GitHub</span>
+            </label>
+            <label class="check">
+              <input
+                type="radio"
+                name="origem"
+                value="externa"
+                [checked]="origem() === 'externa'"
+                (change)="mudarOrigem($event)"
+              />
+              <span>Link externo</span>
+            </label>
+          </div>
+        </div>
 
-      <label for="pagina">Página do mod (opcional)</label>
-      <input
-        id="pagina"
-        name="pagina"
-        type="url"
-        pattern="https://.*"
-        placeholder="https://…"
-        [value]="prefill()?.pagina ?? ''"
-      />
-
-      <label for="capa">Capa (opcional)</label>
-      <input id="capa" name="capa" type="file" accept="image/*" (change)="definirCapa($event)" />
-      <p class="form-hint">
-        @if (capa(); as capaEscolhida) {
-          {{ capaEscolhida.nome }} convertida para WebP.
-        } @else if (editing()) {
-          Deixe vazio para manter a capa atual.
+        @if (origem() === 'github') {
+          <div class="campo">
+            <label for="repo">Repositório (dono/nome)</label>
+            <input
+              id="repo"
+              name="repo"
+              type="text"
+              required
+              pattern="[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}"
+              spellcheck="false"
+              placeholder="Ex.: fulana/painel-digital"
+              [value]="prefill()?.repo ?? ''"
+            />
+          </div>
+          <div class="campo">
+            <label for="tag">Prefixo da tag</label>
+            <input
+              id="tag"
+              name="tag"
+              type="text"
+              required
+              maxlength="64"
+              placeholder="Ex.: PainelDigital-v"
+              [value]="prefill()?.tag ?? ''"
+            />
+            <p class="form-hint">
+              O instalador procura a última release cuja tag começa com isso. Nova versão do mod = nova
+              release com esse prefixo.
+            </p>
+          </div>
+          <div class="campo">
+            <label for="arquivo">Arquivo</label>
+            <input
+              id="arquivo"
+              name="arquivo"
+              type="text"
+              required
+              maxlength="128"
+              placeholder="Ex.: PainelDigital.dll"
+              [value]="prefill()?.arquivo ?? ''"
+            />
+          </div>
         } @else {
-          JPG ou PNG: o navegador converte para WebP de até 300 KB antes de enviar.
+          <div class="campo">
+            <label for="url">Endereço do arquivo</label>
+            <input
+              id="url"
+              name="url"
+              type="url"
+              required
+              pattern="https://.*"
+              placeholder="https://…"
+              [value]="prefill()?.url ?? ''"
+            />
+            <p class="form-hint">Precisa ser um endereço https direto para o arquivo.</p>
+          </div>
         }
-      </p>
+      </fieldset>
 
-      <label for="galeria">Galeria (opcional)</label>
-      <textarea
-        id="galeria"
-        name="galeria"
-        rows="4"
-        placeholder="https://raw.githubusercontent.com/…"
-        [value]="prefill()?.galeria ?? ''"
-      ></textarea>
-      <p class="form-hint">
-        Um endereço por linha, de imagens hospedadas no repositório do mod
-        (raw.githubusercontent.com). Aparecem como galeria na página do mod.
-      </p>
+      <fieldset class="secao">
+        <legend>Mídia e links</legend>
+        <div class="campo">
+          <label for="pagina">Página do mod (opcional)</label>
+          <input
+            id="pagina"
+            name="pagina"
+            type="url"
+            pattern="https://.*"
+            placeholder="https://…"
+            [value]="prefill()?.pagina ?? ''"
+          />
+        </div>
+        <div class="campo">
+          <label for="capa">Capa (opcional)</label>
+          <input id="capa" name="capa" type="file" accept="image/*" (change)="definirCapa($event)" />
+          <p class="form-hint">
+            @if (capa(); as capaEscolhida) {
+              {{ capaEscolhida.nome }} convertida para WebP.
+            } @else if (editing()) {
+              Deixe vazio para manter a capa atual.
+            } @else {
+              JPG ou PNG: o navegador converte para WebP de até 300 KB antes de enviar.
+            }
+          </p>
+        </div>
+        <div class="campo">
+          <label for="galeria">Galeria (opcional)</label>
+          <textarea
+            id="galeria"
+            name="galeria"
+            rows="4"
+            placeholder="https://raw.githubusercontent.com/…"
+            [value]="prefill()?.galeria ?? ''"
+          ></textarea>
+          <p class="form-hint">
+            Um endereço por linha, de imagens hospedadas no repositório do mod
+            (raw.githubusercontent.com). Aparecem como galeria na página do mod.
+          </p>
+        </div>
+      </fieldset>
 
       <p #erro id="submit-erro" class="form-error" role="alert">{{ error() }}</p>
       <div class="form-actions">
