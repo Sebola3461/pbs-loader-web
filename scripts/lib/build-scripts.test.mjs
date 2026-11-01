@@ -103,7 +103,7 @@ test('buildHeaders monta a CSP com os hashes sem repetir', () => {
     headers,
     /script-src 'self' 'sha256-a' 'sha256-b' https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js;/,
   );
-  assert.match(headers, new RegExp(`img-src 'self' data: ${COVER_ORIGIN}`));
+  assert.match(headers, new RegExp(`img-src 'self' data: ${COVER_ORIGIN} https:\\/\\/raw\\.githubusercontent\\.com`));
   assert.match(headers, /frame-src https:\/\/challenges\.cloudflare\.com;/);
   assert.match(headers, /connect-src 'self';/);
   assert.match(

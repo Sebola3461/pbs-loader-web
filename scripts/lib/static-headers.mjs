@@ -78,7 +78,7 @@ export function buildHeaders(scriptHashes) {
     "default-src 'self'",
     `script-src ${scripts}`,
     `style-src 'self' 'unsafe-inline' ${GOOGLE_FONTS.css}`,
-    `img-src 'self' data: ${COVER_ORIGIN}`,
+    `img-src 'self' data: ${COVER_ORIGIN} https://raw.githubusercontent.com`,
     `frame-src ${TURNSTILE.frame}`,
     "connect-src 'self'",
     `font-src 'self' ${GOOGLE_FONTS.font}`,

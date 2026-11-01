@@ -44,6 +44,22 @@
       <img class="cover" [src]="url" [alt]="'Capa de ' + view.mod.nome" width="1280" height="720" />
     }
 
+    @if (view.mod.imagens?.length) {
+      <div class="galeria">
+        @for (imagem of view.mod.imagens; track imagem; let i = $index) {
+          <a [href]="imagem" target="_blank" rel="noopener">
+            <img
+              [src]="imagem"
+              [alt]="'Imagem ' + (i + 1) + ' de ' + view.mod.nome"
+              loading="lazy"
+              width="1280"
+              height="720"
+            />
+          </a>
+        }
+      </div>
+    }
+
     <div class="columns">
       <section class="description" aria-labelledby="sobre">
         <h2 id="sobre">Sobre</h2>

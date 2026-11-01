@@ -11,9 +11,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const OPERATIONS = ['publish', 'edit', 'remove', 'hide'] as const;
 type Operation = (typeof OPERATIONS)[number];
 
-/** Capa vem como caminho relativo do catálogo ("covers/<nome>.webp"); nada de URL externa nem outro formato. */
-const CAPA_PATH = /^covers\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}\.webp$/;
-
 /** O catálogo recusa PR com capa acima disso (mesmo limite do rules.mjs de lá). */
 export const MAX_COVER_BYTES = 300 * 1024;
 
@@ -129,16 +126,31 @@ function githubSource(mod: Record<string, unknown>, tipo: string): Record<string
 
 const REPO = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/;
 
+/** Galeria do mod: imagens hospedadas no GitHub (o CSP do site só mostra imagens daí). */
+const IMAGEM_URL = /^https:\/\/raw\.githubusercontent\.com\/[^\s]+$/;
+
+function lerImagens(body: unknown): string[] {
+  const raw = field(body, 'imagens');
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.length > 10) invalidPayload();
+  return raw.map((item) => {
+    const url = str(item, 10, 500);
+    if (!IMAGEM_URL.test(url)) invalidPayload();
+    return url;
+  });
+}
+
 /**
  * Monta o JSON canônico do mod a partir do que o cliente mandou. Dono vira a conta logada (site), autor vira o
- * username, e confiável e datas ficam fora do controle do cliente: quem concede confiança é a moderação, e as
- * datas nascem do histórico do Git no catálogo. O caminho da capa também é do servidor (covers/<id>.webp).
+ * username. O schema do catálogo é additionalProperties: false e NÃO tem capa, confiável nem datas: esses campos
+ * pertencem ao agregado (a capa vem do arquivo covers/<id>.webp no PR, o confiável vem dos autores confiáveis e
+ * as datas, do histórico do Git), então nunca entram no payload.
  */
 function modPayloadFrom(
   raw: unknown,
   user: User,
   modId: string,
-  capa: string | null,
+  imagens: string[],
 ): Record<string, unknown> {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) invalidPayload();
   const mod = raw as Record<string, unknown>;
@@ -147,14 +159,6 @@ function modPayloadFrom(
   const tipo = mod.tipo;
   if (typeof tipo !== 'string' || !MOD_TYPES.includes(tipo as ModType)) invalidPayload();
   const pagina = mod.pagina === null ? null : httpsUrl(mod.pagina);
-  const capaInformada = mod.capa ?? null;
-  if (
-    capaInformada !== null &&
-    (typeof capaInformada !== 'string' || !CAPA_PATH.test(capaInformada))
-  ) {
-    invalidPayload();
-  }
-  void capaInformada; // O caminho real é derivado do id pelo chamador; o que o cliente manda é ignorado.
   const source =
     mod.origem === 'github'
       ? githubSource(mod, tipo)
@@ -172,20 +176,12 @@ function modPayloadFrom(
     dependencias: idList(mod.dependencias),
     ...source,
     pagina,
-    capa,
-    confiavel: false,
-    criadoEm: null,
-    atualizadoEm: null,
+    ...(imagens.length ? { imagens } : {}),
   };
 }
 
 /** Valida o corpo do envio e devolve o que o resto do fluxo usa; qualquer desvio vira 400 estável. */
-function readSubmission(
-  body: unknown,
-  user: User,
-  modId: string,
-  capaAtual: string | null,
-): SubmissionInput {
+function readSubmission(body: unknown, user: User, modId: string): SubmissionInput {
   const operation = field(body, 'operation');
   if (typeof operation !== 'string' || !OPERATIONS.includes(operation as Operation)) {
     throw new HttpError(400, 'invalid_operation');
@@ -195,11 +191,10 @@ function readSubmission(
     throw new HttpError(400, 'invalid_idempotency_key');
   }
   const cover = capaValida(field(body, 'capaBase64'));
-  // Capa nova sobrescreve; sem capa nova, a edição preserva a capa atual e a publicação nasce sem capa.
-  const capa = cover ? `covers/${modId}.webp` : (operation === 'edit' ? capaAtual : null);
+  const imagens = lerImagens(body);
   const withPayload = operation === 'publish' || operation === 'edit';
   const payloadText = withPayload
-    ? JSON.stringify(modPayloadFrom(field(body, 'mod'), user, modId, capa))
+    ? JSON.stringify(modPayloadFrom(field(body, 'mod'), user, modId, imagens))
     : null;
   return { operation: operation as Operation, modId, key, payloadText, cover };
 }
@@ -343,8 +338,7 @@ export async function recordSubmission(
 ): Promise<RouteResult> {
   const modId = field(body, 'modId');
   if (typeof modId !== 'string' || !MOD_ID.test(modId)) throw new HttpError(400, 'invalid_mod_id');
-  const capaAtual = mods.get(modId)?.capa ?? null;
-  const input = readSubmission(body, user, modId, capaAtual);
+  const input = readSubmission(body, user, modId);
   const existing = await findReplayRow(db, user.id, input.key);
   if (existing) {
     ensureSameIntent(existing, input);

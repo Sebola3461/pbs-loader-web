@@ -62,6 +62,7 @@ export class Submit {
       descricao: mod.descricao,
       versoes: mod.versoesDoJogo.join(', '),
       dependencias: mod.dependencias.join(', '),
+      galeria: mod.imagens?.join('\n') ?? '',
       pagina: mod.pagina ?? '',
       repo: github ? github.repo : '',
       tag: github ? github.tag : '',
@@ -111,6 +112,17 @@ export class Submit {
       this.fail('Cada dependência precisa ser o id de um mod: letras, números, "_" ou "-".');
       return;
     }
+    const galeria = value('galeria')
+      .split('\n')
+      .map((item) => item.trim())
+      .filter((item) => item !== '');
+    if (
+      galeria.length > 10 ||
+      galeria.some((g) => !g.startsWith('https://raw.githubusercontent.com/'))
+    ) {
+      this.fail('Cada endereço da galeria deve começar com https://raw.githubusercontent.com/ (máximo de 10).');
+      return;
+    }
     const modId = this.editing() ? this.id()! : value('id');
     const mod: Record<string, unknown> = {
       id: modId,
@@ -142,6 +154,7 @@ export class Submit {
           idempotencyKey: this.idempotencyKey,
           mod,
           capaBase64: this.capa()?.base64 ?? null,
+          ...(galeria.length ? { imagens: galeria } : {}),
         }),
       );
       this.sent.set({ modId: result.submission.modId, prNumber: result.submission.prNumber, removed: false });

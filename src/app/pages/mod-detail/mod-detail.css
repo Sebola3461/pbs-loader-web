@@ -52,6 +52,25 @@
   border: 1px solid var(--color-border);
 }
 
+.galeria {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-3);
+}
+
+.galeria img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  transition: border-color 150ms ease;
+}
+
+.galeria a:hover img {
+  border-color: var(--color-border-strong);
+}
+
 .columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

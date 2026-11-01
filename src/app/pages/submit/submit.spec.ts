@@ -319,4 +319,27 @@ describe('Submit', () => {
     expect(el.querySelector('form')).not.toBeNull();
     expect((el.querySelector('#nome') as HTMLInputElement).value).toBe('');
   });
+
+  it('galeria do mod vai no POST como imagens', async () => {
+    const { el, http } = await setup(ANA);
+    fill(el, {
+      ...FORM_DEFAULTS,
+      galeria: 'https://raw.githubusercontent.com/Sebola3461/FreeWalk/main/prints/salao.webp',
+    });
+    submitForm(el);
+    const req = http.expectOne('/api/submissions');
+    expect((req.request.body as Record<string, unknown>)['imagens']).toEqual([
+      'https://raw.githubusercontent.com/Sebola3461/FreeWalk/main/prints/salao.webp',
+    ]);
+    req.flush({ submission: { id: 's7', modId: 'Novo', status: 'pending', prNumber: null } });
+  });
+
+  it('galeria com endereço fora do GitHub falha no cliente, sem POST', async () => {
+    const { fixture, el, http } = await setup(ANA);
+    fill(el, { ...FORM_DEFAULTS, galeria: 'https://exemplo.com/print.png' });
+    submitForm(el);
+    fixture.detectChanges();
+    expect(text(el, '.form-error')).toContain('raw.githubusercontent.com');
+    http.expectNone('/api/submissions');
+  });
 });

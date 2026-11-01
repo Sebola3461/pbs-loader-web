@@ -19,6 +19,8 @@ interface CatalogModBase {
   readonly descricao: string;
   readonly versoesDoJogo: readonly string[];
   readonly dependencias: readonly string[];
+  /** Galeria: endereços de imagens hospedadas no repo do próprio mod. */
+  readonly imagens?: readonly string[];
   readonly pagina: string | null;
   readonly capa: string | null;
   readonly confiavel: boolean;

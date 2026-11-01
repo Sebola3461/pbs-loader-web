@@ -53,6 +53,9 @@ const FAKE_WEBP = (() => {
   return btoa(String.fromCharCode(...bytes));
 })();
 
+/** Imagem de galeria no formato que o servidor aceita: raw.githubusercontent.com (o CSP do site só mostra daí). */
+const URL_IMAGEM = 'https://raw.githubusercontent.com/Sebola3461/FreeWalk/main/prints/salao.webp';
+
 async function setup() {
   const db = createTestDatabase();
   const ana = await registerUser(db, 'Ana', 'ana', FAKE_HASH, NOW);
@@ -110,12 +113,12 @@ describe('submissões', () => {
       dono: { site: ana.id },
       dependencias: ['Painel'],
       pagina: 'https://exemplo.com/wiki',
-      // A capa mandada pelo cliente é ignorada: o caminho é sempre covers/<id>.webp, derivado no servidor.
-      capa: null,
-      confiavel: false,
-      criadoEm: null,
-      atualizadoEm: null,
     });
+    // O schema da comunidade não tem capa, confiável nem datas: esses campos pertencem ao agregado do catálogo.
+    expect(payload).not.toHaveProperty('capa');
+    expect(payload).not.toHaveProperty('confiavel');
+    expect(payload).not.toHaveProperty('criadoEm');
+    expect(payload).not.toHaveProperty('atualizadoEm');
   });
 
   it('recusa publicar id que já existe no catálogo', async () => {
@@ -254,13 +257,33 @@ describe('submissões', () => {
       recordSubmission(
         db,
         ana,
-        body({ mod: validMod({ capa: 'http://exemplo.com/capa.webp' }) }),
+        body({ imagens: ['https://exemplo.com/print.png'] }),
         mods,
         NOW,
       ),
       400,
       'invalid_payload',
     );
+    await expectHttpError(
+      recordSubmission(db, ana, body({ imagens: Array(11).fill(URL_IMAGEM) }), mods, NOW),
+      400,
+      'invalid_payload',
+    );
+  });
+
+  it('galeria de imagens do GitHub vai no payload', async () => {
+    const { db, ana, mods } = await setup();
+    const result = await recordSubmission(
+      db,
+      ana,
+      body({ imagens: [URL_IMAGEM, URL_IMAGEM.replace('salao', 'porta-aberta')] }),
+      mods,
+      NOW,
+      async () => ({ prNumber: 4 }),
+    );
+    expect(result.response.status).toBe(201);
+    const row = db.raw.prepare('SELECT payload FROM submissions').get() as { payload: string };
+    expect(JSON.parse(row.payload).imagens).toHaveLength(2);
   });
 
   it('publica por link externo com url https', async () => {
@@ -530,7 +553,7 @@ describe('submissões', () => {
     expect(db.raw.prepare('SELECT status FROM submissions').get()).toEqual({ status: 'merged' });
   });
 
-  it('capa válida vira covers/<id>.webp no payload e chega ao publicador', async () => {
+  it('capa válida chega ao publicador como bytes (o JSON da comunidade não tem capa)', async () => {
     const { db, ana, mods } = await setup();
     let recebido: { coverBase64: string | null } | null = null;
     const result = await recordSubmission(
@@ -545,8 +568,10 @@ describe('submissões', () => {
       },
     );
     expect(result.response.status).toBe(201);
-    const row = db.raw.prepare('SELECT payload FROM submissions').get() as { payload: string };
-    expect(JSON.parse(row.payload).capa).toBe('covers/Novo.webp');
+    const payload = JSON.parse(
+      (db.raw.prepare('SELECT payload FROM submissions').get() as { payload: string }).payload,
+    );
+    expect(payload).not.toHaveProperty('capa');
     expect(recebido).toMatchObject({ coverBase64: FAKE_WEBP });
   });
 
@@ -566,8 +591,9 @@ describe('submissões', () => {
     );
   });
 
-  it('edição sem capa nova preserva a capa atual do catálogo', async () => {
+  it('edição sem capa nova não manda capa no payload (a capa do repo fica intacta)', async () => {
     const { db, bia, mods } = await setup();
+    let recebido: { coverBase64: string | null } | null = null;
     const result = await recordSubmission(
       db,
       bia,
@@ -579,11 +605,18 @@ describe('submissões', () => {
       }),
       mods,
       NOW,
+      async (row) => {
+        recebido = row;
+        return { prNumber: 8 };
+      },
     );
     expect(result.response.status).toBe(201);
-    const row = db.raw
-      .prepare('SELECT payload FROM submissions WHERE mod_id = ?')
-      .get('Mapa') as { payload: string };
-    expect(JSON.parse(row.payload).capa).toBe('covers/Mapa.webp');
+    const payload = JSON.parse(
+      (db.raw
+        .prepare('SELECT payload FROM submissions WHERE mod_id = ?')
+        .get('Mapa') as { payload: string }).payload,
+    );
+    expect(payload).not.toHaveProperty('capa');
+    expect(recebido).toMatchObject({ coverBase64: null });
   });
 });

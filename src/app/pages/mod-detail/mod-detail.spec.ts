@@ -114,4 +114,18 @@ describe('ModDetail', () => {
       [...el.querySelectorAll('.actions a')].some((a) => a.textContent?.trim() === 'Editar'),
     ).toBe(false);
   });
+
+  it('mod com imagens mostra a galeria', async () => {
+    const { el } = await render(
+      'PainelDigital',
+      GITHUB_SLUG,
+      null,
+      githubMod({
+        imagens: ['https://raw.githubusercontent.com/Sebola3461/FreeWalk/main/prints/salao.webp'],
+      }),
+    );
+    const imgs = el.querySelectorAll('.galeria img');
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0].getAttribute('src')).toContain('prints/salao.webp');
+  });
 });

@@ -228,6 +228,19 @@
         }
       </p>
 
+      <label for="galeria">Galeria (opcional)</label>
+      <textarea
+        id="galeria"
+        name="galeria"
+        rows="4"
+        placeholder="https://raw.githubusercontent.com/…"
+        [value]="prefill()?.galeria ?? ''"
+      ></textarea>
+      <p class="form-hint">
+        Um endereço por linha, de imagens hospedadas no repositório do mod
+        (raw.githubusercontent.com). Aparecem como galeria na página do mod.
+      </p>
+
       <p #erro id="submit-erro" class="form-error" role="alert">{{ error() }}</p>
       <div class="form-actions">
         <button type="submit" class="button" [disabled]="busy()">
