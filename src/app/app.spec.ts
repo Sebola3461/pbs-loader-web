@@ -34,7 +34,13 @@ describe('App', () => {
       'Mods',
       'Documentação',
       'Enviar mod',
+      'Baixar o PBSLoader',
     ]);
+    // O download do instalador é o primeiro passo: o botão aponta direto para o asset da release estável.
+    expect(
+      [...el.querySelectorAll('.nav a')].find((a) => a.textContent?.trim() === 'Baixar o PBSLoader')
+        ?.getAttribute('href'),
+    ).toBe('https://github.com/Sebola3461/pbsu-loader/releases/latest/download/PbsuLoader.exe');
     expect(el.querySelector('main#conteudo router-outlet')).not.toBeNull();
     expect(el.querySelector('.site-footer')?.textContent).toContain(
       'sem ligação com os desenvolvedores',

@@ -19,7 +19,11 @@
         </li>
         <li><a [href]="links.docs" rel="noopener">Documentação</a></li>
         <li>
-          <a class="button" routerLink="/enviar">Enviar mod</a>
+          <a class="button button-secondary" routerLink="/enviar">Enviar mod</a>
+        </li>
+        <!-- O download do instalador é o primeiro passo do usuário: ação principal do cabeçalho. -->
+        <li>
+          <a class="button" [href]="links.loaderDownload" rel="noopener">Baixar o PBSLoader</a>
         </li>
       </ul>
     </nav>
